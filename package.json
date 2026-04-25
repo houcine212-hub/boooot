@@ -1,0 +1,22 @@
+{
+  "name": "simplified",
+  "version": "1.0.0",
+  "main": "bot.js",
+  "scripts": {
+    "test": "node tests/run.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "jimp": "^0.22.12",
+    "jsqr": "^1.4.0",
+    "key": "^0.1.11",
+    "mysql2": "^3.22.2",
+    "node-telegram-bot-api": "^0.67.0",
+    "openai": "^6.34.0",
+    "qrcode": "^1.5.4"
+  }
+}
