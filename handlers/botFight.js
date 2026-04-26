@@ -7,7 +7,7 @@ const { sendCardVisual, escapeMarkdown } = require('../utils/cardVisuals');
 const fights = new Map();
 // Fight TTL timers: chatId -> timeoutId
 const fightTimers = new Map();
-const FIGHT_TTL = 15 * 60 * 1000; // 15 minutes
+const FIGHT_TTL = 3 * 60 * 1000; // 3 minutes
 
 // ─── Internal: set/reset fight TTL ───────────────────────────────────────────
 function _setFightTimer(bot, chatId) {
@@ -19,11 +19,9 @@ function _setFightTimer(bot, chatId) {
     fightTimers.delete(chatId);
     session.clearSession(fight.playerTelegramId);
     try {
-      await bot.sendMessage(chatId,
-        '⏰ *انتهت مهلة النزال (15 دقيقة).* تم إلغاؤه تلقائياً.',
-        { parse_mode: 'Markdown' }
-      );
-    } catch {}
+      await bot.sendMessage(chatId, ' دازت 3 دقايق بلا حتى شي تفاعل. تم إنهاء النزال تلقائياً.');
+    }
+    catch {}
   }, FIGHT_TTL);
   fightTimers.set(chatId, id);
 }
@@ -125,6 +123,10 @@ async function checkWin(bot, chatId, fight) {
       { parse_mode: 'Markdown' }
     );
     await applyWinBonus(bot, chatId, fight);
+    await db.query(
+      'UPDATE players SET rank_points = rank_points + ? WHERE telegram_id = ?',
+      [fight.botLevel * 10, fight.playerTelegramId]
+    );
     _endFight(chatId, fight.playerTelegramId);
     return true;
   }
@@ -134,6 +136,7 @@ async function checkWin(bot, chatId, fight) {
       { parse_mode: 'Markdown' }
     );
     await db.query('UPDATE players SET losses = losses + 1 WHERE telegram_id = ?', [fight.playerTelegramId]);
+    await db.query('UPDATE players SET rank_points = GREATEST(0, rank_points - 15) WHERE telegram_id = ?', [fight.playerTelegramId]);
     _endFight(chatId, fight.playerTelegramId);
     return true;
   }

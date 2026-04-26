@@ -5,6 +5,7 @@ const session = require('./middleware/sessionManager');
 const permissions = require('./utils/permissions');
 
 // Commands
+const aboutCmd = require('./commands/about');
 const loginCmd = require('./commands/login');
 const panelCmd = require('./commands/panel');
 const panelBotCmd = require('./commands/panelBot');
@@ -18,7 +19,9 @@ const fastCards = require('./commands/fastCards');
 const cancelCmd = require('./commands/cancel');
 const removeMessages = require('./commands/removeMessages');
 const setImgCmd = require('./commands/setimg');
-
+const statusCmd    = require('./commands/status');
+const settitleCmd  = require('./commands/settitle');
+const territoryCmd = require('./commands/territory');
 // Handlers
 const identityCard = require('./handlers/identityCard');
 const botIdentityCard = require('./handlers/botIdentityCard');
@@ -84,6 +87,10 @@ fastCards.register(bot);
 cancelCmd.register(bot);
 removeMessages.register(bot);
 setImgCmd.register(bot);
+statusCmd.register(bot);
+settitleCmd.register(bot);
+territoryCmd.register(bot);
+aboutCmd.register(bot);
 
 bot.on('callback_query', async (query) => {
   const { data, message, from } = query;
@@ -91,7 +98,7 @@ bot.on('callback_query', async (query) => {
   const tid = from.id;
 
   await bot.answerCallbackQuery(query.id);
-
+  if (data.startsWith('about_')) return aboutCmd.handleCallback(bot, query);
   if (data.startsWith('fight_')) return fightCmd.handleFightCallback(bot, query);
   if (data.startsWith('pvp_')) return pvpCmd.handlePvpCallback(bot, query);
   if (data.startsWith('bcm_')) return botCardManager.handleCallback(bot, query);

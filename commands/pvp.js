@@ -4,7 +4,7 @@ const combatEngine = require('../utils/CombatEngine');
 const { sendCardVisual, escapeMarkdown } = require('../utils/cardVisuals');
 
 const REQUEST_TTL = 60 * 1000;
-const FIGHT_TTL = 15 * 60 * 1000;
+const FIGHT_TTL = 3 * 60 * 1000;
 const CHAIN_SKIP_WORDS = new Set(['skip', 'pass']);
 
 const pendingChallenges = new Map();
@@ -162,10 +162,49 @@ function setFightTimer(bot, chatId) {
   const timerId = setTimeout(async () => {
     const fight = fights.get(chatId);
     if (!fight) return;
-    cancelFight(chatId);
+
+    // Determine staller based on current fight status
+    let stallerId = null;
+    if (fight.status === 'initiative_waiting_other') {
+      stallerId = fight.reactivePlayerId; // active already sent IDC, reactive is stalling
+    } else if (fight.status === 'active_turn') {
+      stallerId = fight.activePlayerId;
+    } else if (fight.status === 'chain_response') {
+      stallerId = fight.chainResponderId;
+    }
+
+    // No identifiable staller — cancel normally
+    if (!stallerId) {
+      cancelFight(chatId);
+      try {
+        await bot.sendMessage(chatId, '⌛ انتهت مهلة Friendly PvP بسبب عدم النشاط. تم إنهاء النزال تلقائياً.');
+      } catch {}
+      return;
+    }
+
+    // Staller identified — award win by timeout
+    const winnerId = getOtherPlayerId(fight, stallerId);
+    const winner   = fight.players[winnerId];
+    const loser    = fight.players[stallerId];
+
     try {
-      await bot.sendMessage(chatId, '⌛ انتهت مهلة Friendly PvP بسبب عدم النشاط. تم إنهاء النزال تلقائياً.');
+      await bot.sendMessage(chatId,
+        [
+          '⌛ *انتهت المهلة! \\(3 دقيقة\\)*',
+          `😴 *${escapeMarkdown(loser.name)}* تقاعس ولم يتحرك في الوقت المحدد\\.`,
+          `🏆 *${escapeMarkdown(winner.name)}* فاز بـ *Timeout Forfeit*\\!`
+        ].join('\n'),
+        { parse_mode: 'MarkdownV2' }
+      );
     } catch {}
+
+    try {
+      await db.query('UPDATE players SET wins   = wins   + 1 WHERE telegram_id = ?', [winner.telegramId]);
+      await db.query('UPDATE players SET losses = losses + 1 WHERE telegram_id = ?', [loser.telegramId]);
+      await applyPvPWinBonus(bot, chatId, winner, loser);
+    } catch {}
+
+    _endFight(chatId);
   }, FIGHT_TTL);
   fightTimers.set(chatId, timerId);
 }
@@ -314,6 +353,69 @@ function _endFight(chatId) {
   fights.delete(chatId);
 }
 
+// ─── PvP win bonus ────────────────────────────────────────────────────────────
+function _calcPower(identityCard) {
+  return (
+    (identityCard.hp        || 0) +
+    (identityCard.atk       || 0) +
+    (identityCard.magic     || 0) +
+    (identityCard.def       || 0) +
+    (identityCard.spd       || 0) +
+    (identityCard.accuracy  || 0)
+  );
+}
+
+function _getPvPBonus(powerDiff) {
+  if (powerDiff >= 2000)             return { points: 200, label: '💪 الخصم كان أقوى بكثير' };
+  if (powerDiff > 0)                 return { points: 100, label: '⚔️ الخصم كان أقوى قليلاً' };
+  if (powerDiff > -2000)             return { points: 50,  label: '⚖️ الخصم كان بنفس مستواك تقريباً' };
+  /* powerDiff <= -2000 */           return { points: 20,  label: '🐣 الخصم كان أضعف بكثير' };
+}
+
+async function applyPvPWinBonus(bot, chatId, winnerState, loserState) {
+  const winnerPower = _calcPower(winnerState.identityCard);
+  const loserPower  = _calcPower(loserState.identityCard);
+  const powerDiff   = loserPower - winnerPower;
+
+  const { points, label } = _getPvPBonus(powerDiff);
+  const playerId = winnerState.playerId;
+
+  await db.query(
+    `UPDATE identity_cards
+        SET hp=hp+?,
+            atk=atk+?,
+            available_atk=available_atk+?,
+            magic=magic+?,
+            available_magic=available_magic+?,
+            def=def+?,
+            available_def=available_def+?,
+            spd=spd+?,
+            available_spd=available_spd+?,
+            accuracy=accuracy+?,
+            available_accuracy=available_accuracy+?
+      WHERE player_id=?`,
+    [points, points, points, points, points, points, points, points, points, points, points, playerId]
+  );
+  await db.query(
+    'UPDATE play_cards SET atk=atk+?,magic=magic+?,def=def+?,accuracy=accuracy+?,spd=spd+? WHERE player_id=?',
+    [points, points, points, points, points, playerId]
+  );
+  await db.query(
+    `UPDATE weapon_cards SET atk=atk+?,magic=magic+?,def=def+?,accuracy=accuracy+?,spd=spd+?
+     WHERE player_id=? AND weapon_type='normal'`,
+    [points, points, points, points, points, playerId]
+  );
+
+  await bot.sendMessage(chatId,
+    [
+      `🎉 *مكافأة الفوز في PvP!*`,
+      `${label}`,
+      `⬆️ جميع إحصائياتك ارتفعت *+${points}* نقطة!`
+    ].join('\n'),
+    { parse_mode: 'Markdown' }
+  );
+}
+
 // ─── Win check ────────────────────────────────────────────────────────────────
 async function checkWin(bot, chatId, fight) {
   const players = fightParticipants(fight).map(id => fight.players[id]);
@@ -335,6 +437,9 @@ async function checkWin(bot, chatId, fight) {
     );
     await db.query('UPDATE players SET wins   = wins   + 1 WHERE telegram_id = ?', [winner.telegramId]);
     await db.query('UPDATE players SET losses = losses + 1 WHERE telegram_id = ?', [loser.telegramId]);
+    await db.query('UPDATE players SET rank_points = rank_points + 30 WHERE telegram_id = ?', [winner.telegramId]);
+    await db.query('UPDATE players SET rank_points = GREATEST(0, rank_points - 20) WHERE telegram_id = ?', [loser.telegramId]);
+    await applyPvPWinBonus(bot, chatId, winner, loser);
   }
 
   _endFight(chatId);
