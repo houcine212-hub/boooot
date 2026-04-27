@@ -2,6 +2,7 @@
 const session = require('../middleware/sessionManager');
 const combatEngine = require('../utils/CombatEngine');
 const { sendCardVisual, escapeMarkdown } = require('../utils/cardVisuals');
+const economy = require('../utils/economy');
 
 const REQUEST_TTL = 60 * 1000;
 const FIGHT_TTL = 3 * 60 * 1000;
@@ -201,7 +202,11 @@ function setFightTimer(bot, chatId) {
     try {
       await db.query('UPDATE players SET wins   = wins   + 1 WHERE telegram_id = ?', [winner.telegramId]);
       await db.query('UPDATE players SET losses = losses + 1 WHERE telegram_id = ?', [loser.telegramId]);
-      await applyPvPWinBonus(bot, chatId, winner, loser);
+      await db.query('UPDATE players SET rank_points = rank_points + 30 WHERE telegram_id = ?', [winner.telegramId]);
+      await db.query('UPDATE players SET rank_points = GREATEST(0, rank_points - 20) WHERE telegram_id = ?', [loser.telegramId]);
+      if (winner.identityCard && loser.identityCard) {
+        await applyPvPWinBonus(bot, chatId, winner, loser);
+      }
     } catch {}
 
     _endFight(chatId);
@@ -431,8 +436,16 @@ async function checkWin(bot, chatId, fight) {
   } else {
     const winner = players.find(p => p.currentHp > 0);
     const loser  = dead[0];
+
+    const mgReward = await economy.rewardPlayerFromCity(
+      winner.playerId, chatId, 100, 'فوز في نزال PvP'
+    );
+    const mgLine = mgReward > 0
+      ? `\n💰 مكافأة المدينة: +${mgReward} MG`
+      : `\n⚠️ صندوق مدينتك فارغ، لم تحصل على مكافأة MG!`;
+
     await bot.sendMessage(chatId,
-      `🏆 *${winner.name} فاز!*\n💀 ${loser.name} هُزم!\n❤️ HP المتبقي: *${winner.currentHp}*`,
+      `🏆 *${winner.name} فاز!*\n💀 ${loser.name} هُزم!\n❤️ HP المتبقي: *${winner.currentHp}*${mgLine}`,
       { parse_mode: 'Markdown' }
     );
     await db.query('UPDATE players SET wins   = wins   + 1 WHERE telegram_id = ?', [winner.telegramId]);

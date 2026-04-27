@@ -25,10 +25,6 @@ async function grantAdminByPlayerCode(bot, chatId, playerCode, grantedByTelegram
   }
 
   const alreadyAdmin = Boolean(player.is_admin);
-  await db.query(
-  'UPDATE players SET is_admin = 1 WHERE telegram_id = ?',
-  [player.telegram_id]
-);
   await permissions.grantAdmin(player.telegram_id);
 
   await bot.sendMessage(

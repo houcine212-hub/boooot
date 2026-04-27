@@ -2,6 +2,7 @@
 const session = require('../middleware/sessionManager');
 const combatEngine = require('../utils/CombatEngine');
 const { sendCardVisual, escapeMarkdown } = require('../utils/cardVisuals');
+const economy = require('../utils/economy');
 
 // Active fights: chatId -> fight state
 const fights = new Map();
@@ -118,8 +119,16 @@ function hpLine(fight) {
 // ─── Check win / lose ─────────────────────────────────────────────────────────
 async function checkWin(bot, chatId, fight) {
   if (fight.bot.currentHp <= 0) {
+    const idealReward = fight.botLevel * 50;
+    const mgReward = await economy.rewardPlayerFromCity(
+      fight.playerId, chatId, idealReward, 'فوز ضد KimiBot'
+    );
+    const mgLine = mgReward > 0
+      ? `\n💰 مكافأة المدينة: +${mgReward} MG`
+      : `\n⚠️ صندوق مدينتك فارغ، لم تحصل على مكافأة MG!`;
+
     await bot.sendMessage(chatId,
-      `🏆 *${escapeMarkdown(fight.player.name)} فاز!*\n💀 KimiBot هُزم!\n❤️ HP المتبقي: ${fight.player.currentHp}`,
+      `🏆 *${escapeMarkdown(fight.player.name)} فاز!*\n💀 KimiBot هُزم!\n❤️ HP المتبقي: ${fight.player.currentHp}${mgLine}`,
       { parse_mode: 'Markdown' }
     );
     await applyWinBonus(bot, chatId, fight);

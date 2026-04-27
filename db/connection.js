@@ -26,6 +26,24 @@ async function ensureColumnExists(connection, tableName, columnName, definition)
   return true;
 }
 
+async function ensureTableExists(connection, tableName, createSQL) {
+  const databaseName = process.env.DB_NAME || 'card';
+  const [rows] = await connection.execute(
+    `SELECT 1
+     FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = ?
+     LIMIT 1`,
+    [databaseName, tableName]
+  );
+
+  if (rows.length > 0) return false;
+
+  await connection.query(createSQL);
+  console.log(`Created table ${tableName}`);
+  return true;
+}
+
 async function backfillIdentityAvailableStats(connection) {
   await connection.query(
     `UPDATE identity_cards
@@ -62,7 +80,6 @@ function getPool() {
  * Initialize database: create tables if they don't exist
  */
 async function initDatabase() {
-  // First connect without database to create it if needed
   const tempConnection = await mysql.createConnection({
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT) || 3306,
@@ -75,8 +92,14 @@ async function initDatabase() {
     const schemaPath = path.join(__dirname, 'schema.sql');
     const schema = fs.readFileSync(schemaPath, 'utf8');
     await tempConnection.query(schema);
+
+    // --- players columns ---
     await ensureColumnExists(tempConnection, 'players', 'is_admin', 'BOOLEAN NOT NULL DEFAULT FALSE');
     await ensureColumnExists(tempConnection, 'players', 'can_manage_cards', 'BOOLEAN NOT NULL DEFAULT FALSE');
+    await ensureColumnExists(tempConnection, 'players', 'rank_points', 'INT NOT NULL DEFAULT 0');
+    await ensureColumnExists(tempConnection, 'players', 'title', 'VARCHAR(100) NULL DEFAULT NULL');
+
+    // --- identity_cards columns ---
     await ensureColumnExists(tempConnection, 'identity_cards', 'image_id', 'VARCHAR(255) NULL');
     const addedIdentityAvailableColumns = [
       await ensureColumnExists(tempConnection, 'identity_cards', 'available_atk', 'INT NOT NULL DEFAULT 0'),
@@ -85,12 +108,79 @@ async function initDatabase() {
       await ensureColumnExists(tempConnection, 'identity_cards', 'available_spd', 'INT NOT NULL DEFAULT 0'),
       await ensureColumnExists(tempConnection, 'identity_cards', 'available_accuracy', 'INT NOT NULL DEFAULT 0')
     ];
+
+    // --- other card image_id columns ---
     await ensureColumnExists(tempConnection, 'play_cards', 'image_id', 'VARCHAR(255) NULL');
     await ensureColumnExists(tempConnection, 'skill_cards', 'image_id', 'VARCHAR(255) NULL');
     await ensureColumnExists(tempConnection, 'weapon_cards', 'image_id', 'VARCHAR(255) NULL');
+
     if (addedIdentityAvailableColumns.some(Boolean)) {
       await backfillIdentityAvailableStats(tempConnection);
     }
+
+    // --- territory tables ---
+    await ensureTableExists(
+      tempConnection,
+      'kingdoms',
+      `CREATE TABLE \`kingdoms\` (
+        \`id\`         INT AUTO_INCREMENT PRIMARY KEY,
+        \`name\`       VARCHAR(100) NOT NULL,
+        \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    );
+
+    await ensureTableExists(
+      tempConnection,
+      'cities',
+      `CREATE TABLE \`cities\` (
+        \`id\`         INT AUTO_INCREMENT PRIMARY KEY,
+        \`chat_id\`    BIGINT NOT NULL UNIQUE,
+        \`name\`       VARCHAR(100) NOT NULL,
+        \`kingdom_id\` INT NOT NULL,
+        \`is_capital\` BOOLEAN NOT NULL DEFAULT FALSE,
+        \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (\`kingdom_id\`) REFERENCES \`kingdoms\`(\`id\`) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    );
+
+    // --- economy columns ---
+    await ensureColumnExists(tempConnection, 'players',  'mg_balance', 'INT NOT NULL DEFAULT 0');
+    await ensureColumnExists(tempConnection, 'kingdoms', 'mg_balance', 'INT NOT NULL DEFAULT 0');
+    await ensureColumnExists(tempConnection, 'cities',   'mg_balance', 'INT NOT NULL DEFAULT 0');
+
+    // --- master_card (Imperial Treasury) ---
+    await ensureTableExists(
+      tempConnection,
+      'master_card',
+      `CREATE TABLE \`master_card\` (
+        \`id\`         INT AUTO_INCREMENT PRIMARY KEY,
+        \`mg_balance\` INT NOT NULL DEFAULT 0,
+        \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    );
+    await tempConnection.query(
+      `INSERT INTO master_card (mg_balance) SELECT 0 WHERE NOT EXISTS (SELECT 1 FROM master_card)`
+    );
+
+    // --- mg_transactions ---
+    await ensureTableExists(
+      tempConnection,
+      'mg_transactions',
+      `CREATE TABLE \`mg_transactions\` (
+        \`id\`          INT AUTO_INCREMENT PRIMARY KEY,
+        \`type\`        VARCHAR(50)  NOT NULL,
+        \`amount\`      INT          NOT NULL,
+        \`source\`      VARCHAR(100) NOT NULL,
+        \`target\`      VARCHAR(100) NOT NULL,
+        \`description\` TEXT         NULL,
+        \`created_at\`  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX \`idx_type\`    (\`type\`),
+        INDEX \`idx_source\`  (\`source\`),
+        INDEX \`idx_target\`  (\`target\`),
+        INDEX \`idx_created\` (\`created_at\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    );
+
     console.log('Database and tables initialized successfully.');
   } catch (err) {
     console.error('Error initializing database:', err.message);

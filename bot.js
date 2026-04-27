@@ -22,6 +22,9 @@ const setImgCmd = require('./commands/setimg');
 const statusCmd    = require('./commands/status');
 const settitleCmd  = require('./commands/settitle');
 const territoryCmd = require('./commands/territory');
+const setrankCmd = require('./commands/setrank');
+const economyCmd = require('./commands/economyCommands');
+
 // Handlers
 const identityCard = require('./handlers/identityCard');
 const botIdentityCard = require('./handlers/botIdentityCard');
@@ -91,6 +94,8 @@ statusCmd.register(bot);
 settitleCmd.register(bot);
 territoryCmd.register(bot);
 aboutCmd.register(bot);
+setrankCmd.register(bot);
+economyCmd.register(bot);
 
 bot.on('callback_query', async (query) => {
   const { data, message, from } = query;
@@ -131,7 +136,8 @@ bot.on('callback_query', async (query) => {
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const tid = msg.from.id;
-  const text = (msg.text || msg.caption || '').trim();
+  // FIX 4: changed const → let so we can update text if a QR is decoded mid-session
+  let text = (msg.text || msg.caption || '').trim();
 
   const hasLink = /(https?:\/\/|www\.|t\.me\/)/i.test(text);
   if (hasLink && !(await permissions.isAdmin(tid))) {
@@ -169,13 +175,20 @@ bot.on('message', async (msg) => {
         return pvpCmd.handleFightMessage(bot, msg, decodedCardId);
       }
 
-      if (activeSession) return;
-
-      if (!decodedCardId) {
-        return bot.sendMessage(chatId, '⚠️ لم أتمكن من قراءة QR Code.');
+      // FIX 4: if inside any other session and a QR was decoded, inject it as text
+      // and fall through to the session handlers below instead of silently returning.
+      // Only return early if no QR was found (photo is irrelevant to the session).
+      if (activeSession) {
+        if (!decodedCardId) return;
+        msg.text = decodedCardId;
+        text = decodedCardId;
+        // fall through ↓
+      } else {
+        if (!decodedCardId) {
+          return bot.sendMessage(chatId, '⚠️ لم أتمكن من قراءة QR Code.');
+        }
+        return cardLookup.lookupCard(bot, chatId, decodedCardId);
       }
-
-      return cardLookup.lookupCard(bot, chatId, decodedCardId);
     } catch (err) {
       console.error('QR scan error:', err.message);
       return bot.sendMessage(chatId, '⚠️ خطأ أثناء قراءة الصورة.');

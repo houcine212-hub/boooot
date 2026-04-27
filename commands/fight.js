@@ -1,11 +1,13 @@
 const botFight = require('../handlers/botFight');
 const pvpFight = require('./pvp');
 
-const FIGHT_GROUP_ID = -1003817802467;
+// FIX 3: Use env variable so the group ID can be changed without touching code
+const FIGHT_GROUP_ID = parseInt(process.env.OFFICIAL_GROUP_ID) || -1003817802467;
+
 const MENU_TTL = 2 * 60 * 1000;
 
 const menuContexts = new Map();
-const menuTimers = new Map();
+const menuTimers   = new Map();
 
 function buildMenuKey(chatId, messageId) {
   return `${chatId}:${messageId}`;
@@ -31,7 +33,7 @@ function setMenuContext(chatId, messageId, context) {
 }
 
 function popMenuContext(chatId, messageId) {
-  const key = buildMenuKey(chatId, messageId);
+  const key     = buildMenuKey(chatId, messageId);
   const context = menuContexts.get(key) || null;
   menuContexts.delete(key);
   clearMenuTimer(key);
@@ -50,27 +52,27 @@ function register(bot) {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🤖 نزالات مع KimiBot', callback_data: 'fight_bot' }],
-          [{ text: '🤝 نزالات ودية', callback_data: 'fight_friendly' }],
-          [{ text: '💰 نزالات النهب', callback_data: 'fight_loot' }],
-          [{ text: '📖 طور القصة', callback_data: 'fight_story' }]
-        ]
-      }
+          [{ text: '🤖 نزالات مع KimiBot',  callback_data: 'fight_bot'      }],
+          [{ text: '🤝 نزالات ودية',         callback_data: 'fight_friendly' }],
+          [{ text: '💰 نزالات النهب',         callback_data: 'fight_loot'     }],
+          [{ text: '📖 طور القصة',            callback_data: 'fight_story'    }],
+        ],
+      },
     });
 
     setMenuContext(chatId, menuMessage.message_id, {
-      challengerId: msg.from.id,
+      challengerId:   msg.from.id,
       challengerUser: msg.from,
-      opponentUser: msg.reply_to_message?.from || null
+      opponentUser:   msg.reply_to_message?.from || null,
     });
   });
 }
 
 async function handleFightCallback(bot, query) {
   const { data, message, from } = query;
-  const chatId = message.chat.id;
+  const chatId     = message.chat.id;
   const telegramId = from.id;
-  const context = getMenuContext(chatId, message.message_id);
+  const context    = getMenuContext(chatId, message.message_id);
 
   if (!context) {
     return bot.sendMessage(chatId, '❌ هاد menu ديال $fight سالات. عاود كتب $fight من جديد.');
@@ -103,7 +105,7 @@ async function handleFightCallback(bot, query) {
     return pvpFight.startFriendlyChallenge(bot, {
       chatId,
       challengerUser: context.challengerUser,
-      opponentUser: context.opponentUser
+      opponentUser:   context.opponentUser,
     });
   }
 
