@@ -286,6 +286,7 @@ class CombatEngine {
       reactiveCard,
       activeProfile:   active,
       reactiveProfile: reactive,
+      targetId:        context.targetId || null,
       damage: {
         toActive:   0,
         toReactive: 0,
@@ -329,6 +330,7 @@ class CombatEngine {
 
     const result = {
       chain: chainEntries || [],
+      targetId: context.targetId || null,
       damage: {
         toActive:   0,
         toReactive: 0,
@@ -892,6 +894,102 @@ class CombatEngine {
     };
 
     return labels[type] || type;
+  }
+
+  // ── FFA helpers ──────────────────────────────────────────────────────────────
+
+  /**
+   * Returns true when the participant still has HP.
+   */
+  isAlive(playerState) {
+    this.ensurePlayerState(playerState);
+    return playerState.currentHp > 0;
+  }
+
+  /**
+   * Build a fresh FFA fight object.
+   *
+   * participantsConfig: Array of { playerId, telegramId, name, maxHp, effects?, usedCards? }
+   * stakes: { mg: number, items: [{ qty, name }] }
+   *
+   * Returns:
+   * {
+   *   participants:     [{ playerId, telegramId, name, state, status }],
+   *   currentTurnIndex: 0,
+   *   stakes:           { mg, items },
+   *   status:           'active',
+   * }
+   */
+  createFfaFight(participantsConfig, stakes = { mg: 0, items: [] }) {
+    if (!Array.isArray(participantsConfig) || participantsConfig.length < 2) {
+      throw new Error('createFfaFight requires at least 2 participants.');
+    }
+
+    const participants = participantsConfig.map(cfg => {
+      const state = {
+        currentHp: Number(cfg.maxHp) || 0,
+        effects:   [],
+        usedCards: new Set(),
+      };
+      this.ensurePlayerState(state);
+
+      return {
+        playerId:    cfg.playerId,
+        telegramId:  cfg.telegramId,
+        name:        cfg.name || String(cfg.playerId),
+        state,
+        status:      'alive',   // 'alive' | 'eliminated'
+      };
+    });
+
+    return {
+      participants,
+      currentTurnIndex: 0,
+      stakes: {
+        mg:    Number(stakes.mg) || 0,
+        items: Array.isArray(stakes.items) ? stakes.items : [],
+      },
+      status: 'active',  // 'active' | 'finished'
+    };
+  }
+
+  /**
+   * Advance the fight to the next living participant's turn.
+   * Also marks eliminated participants and updates fight.status when only one remains.
+   *
+   * Mutates fight in place. Returns the new currentTurnIndex, or -1 if the fight is over.
+   */
+  nextTurnIndex(fight) {
+    const { participants } = fight;
+
+    // Sync status flags with current HP
+    for (const p of participants) {
+      if (p.status === 'alive' && p.state.currentHp <= 0) {
+        p.status = 'eliminated';
+      }
+    }
+
+    const alive = participants.filter(p => p.status === 'alive');
+    if (alive.length <= 1) {
+      fight.status = 'finished';
+      return -1;
+    }
+
+    // Advance from current index, wrapping around, skipping eliminated players
+    const total = participants.length;
+    let next = (fight.currentTurnIndex + 1) % total;
+
+    for (let checked = 0; checked < total; checked += 1) {
+      if (participants[next].status === 'alive') {
+        fight.currentTurnIndex = next;
+        return next;
+      }
+      next = (next + 1) % total;
+    }
+
+    // Should never reach here if alive.length > 1, but guard anyway
+    fight.status = 'finished';
+    return -1;
   }
 }
 

@@ -12,6 +12,7 @@ const panelBotCmd = require('./commands/panelBot');
 const botLevelFightCmd = require('./commands/botLevelFight');
 const fightCmd = require('./commands/fight');
 const pvpCmd = require('./commands/pvp');
+const lootPvpCmd = require('./commands/lootPvp');
 const botCardManager = require('./commands/botCardManager');
 const botCardWizard = require('./commands/botCardWizard');
 const adminManager = require('./commands/adminManager');
@@ -24,6 +25,9 @@ const settitleCmd  = require('./commands/settitle');
 const territoryCmd = require('./commands/territory');
 const setrankCmd = require('./commands/setrank');
 const economyCmd = require('./commands/economyCommands');
+const shopCommands = require('./commands/shopCommands');
+const craftingCommands = require('./commands/craftingCommands');
+const storyManager = require('./commands/storyManager');
 
 // Handlers
 const identityCard = require('./handlers/identityCard');
@@ -96,6 +100,9 @@ territoryCmd.register(bot);
 aboutCmd.register(bot);
 setrankCmd.register(bot);
 economyCmd.register(bot);
+shopCommands.register(bot);
+craftingCommands.register(bot);
+storyManager.register(bot);
 
 bot.on('callback_query', async (query) => {
   const { data, message, from } = query;
@@ -104,9 +111,14 @@ bot.on('callback_query', async (query) => {
 
   await bot.answerCallbackQuery(query.id);
   if (data.startsWith('about_')) return aboutCmd.handleCallback(bot, query);
+  if (data.startsWith('shop_') || data.startsWith('spin_')) return shopCommands.handleCallback(bot, query);
+  if (data.startsWith('forge_')) return craftingCommands.handleForgeCallback(bot, query);
+  if (data.startsWith('loot_')) return lootPvpCmd.handleLootCallback(bot, query); 
   if (data.startsWith('fight_')) return fightCmd.handleFightCallback(bot, query);
   if (data.startsWith('pvp_')) return pvpCmd.handlePvpCallback(bot, query);
   if (data.startsWith('bcm_')) return botCardManager.handleCallback(bot, query);
+  if (data.startsWith('story_choice_')) return storyManager.handleChoiceCallback(bot, query);
+  if (data.startsWith('story_battle_')) return storyManager.handleBattleCallback(bot, query);
 
   if (data === 'panel_identity') return identityCard.startIdentityCardCreation(bot, chatId, tid);
   if (data === 'panel_play') return playCard.startPlayCardCreation(bot, chatId, tid);
@@ -131,6 +143,7 @@ bot.on('callback_query', async (query) => {
   if (data.startsWith('panelbot_weaponsub_')) return botWeaponCard.handleBotWeaponSubTypeSelection(bot, chatId, tid, data.replace('panelbot_weaponsub_', ''));
   if (data.startsWith('panelbot_weaponboost_')) return botWeaponCard.handleBotWeaponBoostTargetSelection(bot, chatId, tid, data.replace('panelbot_weaponboost_', ''));
   if (data.startsWith('panelbot_weapondur_')) return botWeaponCard.handleBotWeaponDurationSelection(bot, chatId, tid, data.replace('panelbot_weapondur_', ''));
+  
 });
 
 bot.on('message', async (msg) => {
@@ -207,34 +220,46 @@ bot.on('message', async (msg) => {
     }
   }
 
+  // --- معالجة الجلسات النشطة (Sessions) ---
   if (session.hasActiveSession(tid)) {
     const { action } = session.getSession(tid);
-    const cardId = extractCardId(text);
+    const sessionCardId = extractCardId(text); // نسميوها سمية مختلفة باش ميتوقعش تداخل
 
-    if (action === 'login') return loginCmd.handleLoginStep(bot, msg);
-    if (action === 'identity_card') return identityCard.handleIdentityCardStep(bot, msg);
-    if (action === 'bot_identity_card') return botIdentityCard.handleBotIdentityCardStep(bot, msg);
-    if (action === 'play_card') return playCard.handlePlayCardStep(bot, msg);
-    if (action === 'bot_play_card') return botPlayCard.handleBotPlayCardStep(bot, msg);
-    if (action === 'skill_card') return skillCard.handleSkillCardStep(bot, msg);
-    if (action === 'bot_skill_card') return botSkillCard.handleBotSkillCardStep(bot, msg);
-    if (action === 'weapon_card') return weaponCard.handleWeaponCardStep(bot, msg);
-    if (action === 'bot_weapon_card') return botWeaponCard.handleBotWeaponCardStep(bot, msg);
-    if (action === 'newbotcard') return botCardWizard.handleStep(bot, msg);
-    if (action === 'add_admin') return adminManager.handleStep(bot, msg);
-    if (action === 'fast_player_cards' || action === 'fast_bot_cards') return fastCards.handleStep(bot, msg);
-    if (action === 'bot_fight') return botFight.handleFightMessage(bot, msg, cardId);
-    if (action === 'pvp_fight') return pvpCmd.handleFightMessage(bot, msg, cardId);
-    if (action === 'setcardbot') return botCardManager.handleStep(bot, msg, cardId);
-    if (action === 'setimg') return setImgCmd.handleStep(bot, msg);
+    try {
+      if (action === 'login') return await loginCmd.handleLoginStep(bot, msg);
+      if (action === 'identity_card') return await identityCard.handleIdentityCardStep(bot, msg);
+      if (action === 'bot_identity_card') return await botIdentityCard.handleBotIdentityCardStep(bot, msg);
+      if (action === 'play_card') return await playCard.handlePlayCardStep(bot, msg);
+      if (action === 'bot_play_card') return await botPlayCard.handleBotPlayCardStep(bot, msg);
+      if (action === 'skill_card') return await skillCard.handleSkillCardStep(bot, msg);
+      if (action === 'bot_skill_card') return await botSkillCard.handleBotSkillCardStep(bot, msg);
+      if (action === 'weapon_card') return await weaponCard.handleWeaponCardStep(bot, msg);
+      if (action === 'bot_weapon_card') return await botWeaponCard.handleBotWeaponCardStep(bot, msg);
+      if (action === 'newbotcard') return await botCardWizard.handleStep(bot, msg);
+      if (action === 'add_admin') return await adminManager.handleStep(bot, msg);
+      if (action === 'fast_player_cards' || action === 'fast_bot_cards') return await fastCards.handleStep(bot, msg);
+      if (action === 'bot_fight') return await botFight.handleFightMessage(bot, msg, sessionCardId);
+      if (action === 'pvp_fight') return await pvpCmd.handleFightMessage(bot, msg, sessionCardId);
+      if (action === 'setcardbot') return await botCardManager.handleStep(bot, msg, sessionCardId);
+      // نزال النهب (Loot PvP)
+      if (action === 'awaiting_stakes') return await lootPvpCmd.handleStakesInput(bot, msg);
+      if (action === 'loot_fight') return await lootPvpCmd.handleFightMessage(bot, msg, sessionCardId);
+      
+      if (action === 'setimg') return await setImgCmd.handleStep(bot, msg);
+      if (action === 'use_enhancer') return await shopCommands.handleUseStep(bot, msg);
+      
+      // حماية: إذا كان هناك سيسشن، نخرج دائماً هنا لكي لا نصل للـ Lookup
+      return; 
+    } catch (err) {
+      console.error(`Error in session (${action}):`, err.message);
+      return;
+    }
   }
 
-  const cardId = extractCardId(text);
-  if (cardId) return cardLookup.lookupCard(bot, chatId, cardId);
+  // --- البحث العام عن البطاقات (فقط إذا لم يكن هناك سيسشن) ---
+  const globalCardId = extractCardId(text);
+  if (globalCardId) return cardLookup.lookupCard(bot, chatId, globalCardId);
 });
-
-bot.on('polling_error', (err) => console.error('Polling error:', err.message));
-
 // 🔍 TEMP: log chat ID for every group message
 bot.on('message', (msg) => {
   if (msg.chat.type === 'group' || msg.chat.type === 'supergroup') {

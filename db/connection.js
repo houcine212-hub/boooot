@@ -180,7 +180,37 @@ async function initDatabase() {
         INDEX \`idx_created\` (\`created_at\`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
     );
-
+    await ensureColumnExists(tempConnection, 'players', 'city_id', 'INT NULL DEFAULT NULL');
+ 
+    // --- shop tables ---
+    await ensureTableExists(
+      tempConnection,
+      'shop_items',
+      `CREATE TABLE \`shop_items\` (
+        \`id\`          INT AUTO_INCREMENT PRIMARY KEY,
+        \`name\`        VARCHAR(100) NOT NULL,
+        \`description\` TEXT,
+        \`item_type\`   ENUM('potion','material','card_pack','special') NOT NULL,
+        \`rarity\`      ENUM('common','rare','epic','legendary') NOT NULL DEFAULT 'common',
+        \`price\`       INT NOT NULL DEFAULT 0,
+        \`store_level\` ENUM('city','kingdom','empire') NOT NULL,
+        \`created_at\`  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    );
+ 
+    await ensureTableExists(
+      tempConnection,
+      'player_inventory',
+      `CREATE TABLE \`player_inventory\` (
+        \`id\`        INT AUTO_INCREMENT PRIMARY KEY,
+        \`player_id\` INT NOT NULL,
+        \`item_id\`   INT NOT NULL,
+        \`quantity\`  INT NOT NULL DEFAULT 1,
+        UNIQUE KEY \`uq_player_item\` (\`player_id\`, \`item_id\`),
+        FOREIGN KEY (\`player_id\`) REFERENCES \`players\`(\`id\`) ON DELETE CASCADE,
+        FOREIGN KEY (\`item_id\`)   REFERENCES \`shop_items\`(\`id\`) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    );
     console.log('Database and tables initialized successfully.');
   } catch (err) {
     console.error('Error initializing database:', err.message);

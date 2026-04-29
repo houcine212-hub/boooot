@@ -3,6 +3,8 @@ const session = require('../middleware/sessionManager');
 const combatEngine = require('../utils/CombatEngine');
 const { sendCardVisual, escapeMarkdown } = require('../utils/cardVisuals');
 const economy = require('../utils/economy');
+const crafting = require('../utils/craftingEngine');
+const storyEngine = require('../utils/storyEngine');
 
 // Active fights: chatId -> fight state
 const fights = new Map();
@@ -117,7 +119,9 @@ function hpLine(fight) {
 }
 
 // ─── Check win / lose ─────────────────────────────────────────────────────────
+// ─── Check win / lose ─────────────────────────────────────────────────────────
 async function checkWin(bot, chatId, fight) {
+  // 1. حالة فوز اللاعب
   if (fight.bot.currentHp <= 0) {
     const idealReward = fight.botLevel * 50;
     const mgReward = await economy.rewardPlayerFromCity(
@@ -127,18 +131,32 @@ async function checkWin(bot, chatId, fight) {
       ? `\n💰 مكافأة المدينة: +${mgReward} MG`
       : `\n⚠️ صندوق مدينتك فارغ، لم تحصل على مكافأة MG!`;
 
+    // ── غنائم نزال النهب (Loot Drop) ──
+    const lootSource = `bot_level_${fight.botLevel}`;
+    const drops      = await crafting.getCombatLoot(lootSource);
+    let lootMsg      = '';
+    if (drops.length > 0) {
+      await crafting.awardCombatLoot(fight.playerId, drops);
+      const lootLines = drops.map(d => `  ${d.emoji} ${d.display_name} ×${d.qty}`).join('\n');
+      lootMsg = `\n\n\`\`\`text\n[ LOOT DROP ]\n${lootLines}\n\`\`\``;
+    }
+
     await bot.sendMessage(chatId,
-      `🏆 *${escapeMarkdown(fight.player.name)} فاز!*\n💀 KimiBot هُزم!\n❤️ HP المتبقي: ${fight.player.currentHp}${mgLine}`,
+      `🏆 *${escapeMarkdown(fight.player.name)} فاز!*\n💀 KimiBot هُزم!\n❤️ HP المتبقي: ${fight.player.currentHp}${mgLine}${lootMsg}`,
       { parse_mode: 'Markdown' }
     );
+
     await applyWinBonus(bot, chatId, fight);
     await db.query(
       'UPDATE players SET rank_points = rank_points + ? WHERE telegram_id = ?',
       [fight.botLevel * 10, fight.playerTelegramId]
     );
+
     _endFight(chatId, fight.playerTelegramId);
     return true;
   }
+
+  // 2. حالة فوز البوت (خسارة اللاعب)
   if (fight.player.currentHp <= 0) {
     await bot.sendMessage(chatId,
       `💀 *KimiBot فاز!*\n❌ ${escapeMarkdown(fight.player.name)} هُزم! حاول مرة أخرى.`,
@@ -146,11 +164,14 @@ async function checkWin(bot, chatId, fight) {
     );
     await db.query('UPDATE players SET losses = losses + 1 WHERE telegram_id = ?', [fight.playerTelegramId]);
     await db.query('UPDATE players SET rank_points = GREATEST(0, rank_points - 15) WHERE telegram_id = ?', [fight.playerTelegramId]);
+    
     _endFight(chatId, fight.playerTelegramId);
     return true;
   }
+
   return false;
 }
+
 
 // ─── Win bonus: +100 × level to all stats ────────────────────────────────────
 async function applyWinBonus(bot, chatId, fight) {

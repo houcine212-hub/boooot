@@ -1,5 +1,6 @@
 const botFight = require('../handlers/botFight');
 const pvpFight = require('./pvp');
+const lootPvp = require('./lootPvp');
 
 // FIX 3: Use env variable so the group ID can be changed without touching code
 const FIGHT_GROUP_ID = parseInt(process.env.OFFICIAL_GROUP_ID) || -1003817802467;
@@ -109,7 +110,23 @@ async function handleFightCallback(bot, query) {
     });
   }
 
-  if (['fight_loot', 'fight_story'].includes(data)) {
+  // --- نزال النهب (Loot PvP) ---
+  if (data === 'fight_loot') {
+    popMenuContext(chatId, message.message_id);
+
+    if (lootPvp.hasFight(chatId)) {
+      return bot.sendMessage(chatId, '❌ كاين نزال نهب آخر خدام دابا فهاد الشات. تسنّى حتى يسالي.');
+    }
+
+    return lootPvp.startLootChallenge(bot, {
+      chatId,
+      challengerUser: context.challengerUser,
+      opponentUser:   context.opponentUser,
+    });
+  }
+
+  // --- طور القصة (Story Mode) ---
+  if (data === 'fight_story') {
     popMenuContext(chatId, message.message_id);
     return bot.sendMessage(chatId, '🚧 هاد الوضع مازال قيد التطوير.');
   }

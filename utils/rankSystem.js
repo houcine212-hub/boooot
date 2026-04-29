@@ -4,7 +4,7 @@ const db          = require('../db/connection');
 const permissions = require('./permissions');
 
 // ============================================================
-// TIER 1 — Automatic ranks (derived from points_rank in DB)
+// TIER 1 — Automatic ranks (derived from rank_points in DB)
 // These are NEVER stored in system_rank and NEVER assigned via $setrank
 // ============================================================
 const RP_THRESHOLDS = [
@@ -64,7 +64,7 @@ function manualIndex(rank) {
 // ============================================================
 async function getPlayer(telegramId) {
   return db.queryOne(
-    'SELECT id, character_name, system_rank, points_rank FROM players WHERE telegram_id = ?',
+    'SELECT id, character_name, system_rank, rank_points FROM players WHERE telegram_id = ?',
     [telegramId]
   );
 }
@@ -107,7 +107,7 @@ function getDisplayRankFromRow(player) {
   if (stored !== 'none' && MANUAL_RANKS.includes(stored) && MANUAL_LABELS[stored]) {
     return { label: MANUAL_LABELS[stored], isManual: true };
   }
-  return { label: getRpRank(player.points_rank).label, isManual: false };
+  return { label: getRpRank(player.rank_points).label, isManual: false };
 }
 
 // ============================================================

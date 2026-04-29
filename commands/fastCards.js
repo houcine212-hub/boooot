@@ -36,7 +36,7 @@ function register(bot) {
     const hasPermission = await permissions.canManageCards(telegramId);
 
     if (!hasPermission) {
-      return bot.sendMessage(chatId, '🚫 هذا الأمر مخصص للمشرفين أو من لديهم صلاحية إدارة البطاقات.');
+      return bot.sendMessage(chatId, ' هذا الأمر مخصص للمشرفين أو من لديهم صلاحية إدارة البطاقات.');
     }
 
     const playerCode = match[1]?.trim();
@@ -125,8 +125,33 @@ async function runFastPlayerGeneration(bot, chatId, telegramId, playerCode) {
 
   try {
     const created = await db.withTransaction(async (conn) => {
-      const identity = existingIdentity || await createIdentityCard(conn, player.id, buildPlayerIdentity(player));
-      const playCards = await createPlayCards(conn, player.id, identity.id, buildPlayTemplates(identity, 'تجريبي'));
+      let identity = existingIdentity || await createIdentityCard(conn, player.id, buildPlayerIdentity(player));
+
+      // If reusing an existing identity card, reset the available stat budgets
+      // back to their base values so createPlayCards has a full allocation to work with.
+      if (existingIdentity) {
+        await conn.execute(
+          `UPDATE identity_cards
+              SET available_atk      = atk,
+                  available_magic    = magic,
+                  available_def      = def,
+                  available_spd      = spd,
+                  available_accuracy = accuracy
+            WHERE id = ?`,
+          [identity.id]
+        );
+        // Refresh the local object so buildPlayTemplates sees the reset values
+        identity = {
+          ...identity,
+          available_atk:      identity.atk,
+          available_magic:    identity.magic,
+          available_def:      identity.def,
+          available_spd:      identity.spd,
+          available_accuracy: identity.accuracy,
+        };
+      }
+
+      const playCards  = await createPlayCards(conn, player.id, identity.id, buildPlayTemplates(identity, 'تجريبي'));
       const skillCards = await createSkillCards(conn, player.id, buildSkillTemplates({ scope: 'player' }));
 
       return {
