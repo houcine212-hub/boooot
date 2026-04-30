@@ -1,7 +1,6 @@
 // utils/storyEngine.js
 // Core navigation engine for the Dynamic Story System.
 // Handles node fetching, progress tracking, and display rendering.
-// Battle integration is handled in the next phase via commands/storyManager.js.
 
 const db = require('../db/connection');
 
@@ -37,20 +36,38 @@ async function getBattle(nodeId) {
   );
 }
 
+// ─── Resolve the first available node in the active season ───────────────────
+async function resolveStarterNode() {
+  const row = await db.queryOne(
+    `SELECT sn.node_key
+       FROM story_nodes sn
+       JOIN story_seasons ss ON ss.id = sn.season_id
+      WHERE ss.is_active = 1
+      ORDER BY sn.id ASC
+      LIMIT 1`
+  );
+  return row ? row.node_key : null;
+}
+
 // ─── Get or create player progress ───────────────────────────────────────────
 async function getProgress(playerId) {
   let row = await db.queryOne(
     `SELECT * FROM player_story_progress WHERE player_id = ?`,
     [playerId]
   );
+
   if (!row) {
+    const starterKey = await resolveStarterNode();
+    if (!starterKey) return null;
+
     await db.query(
       `INSERT INTO player_story_progress (player_id, current_node_key, completed_seasons)
-       VALUES (?, 'prologue_1', '[]')`,
-      [playerId]
+       VALUES (?, ?, '[]')`,
+      [playerId, starterKey]
     );
-    row = { player_id: playerId, current_node_key: 'prologue_1', completed_seasons: '[]' };
+    row = { player_id: playerId, current_node_key: starterKey, completed_seasons: '[]' };
   }
+
   return row;
 }
 
@@ -99,7 +116,6 @@ function buildBattleKeyboard(nodeKey) {
 }
 
 // ─── Send a story node to chat ────────────────────────────────────────────────
-// Returns the sent message object.
 async function sendNode(bot, chatId, node, choices, battle) {
   const caption = storyCaption(node.narrative_text);
   let keyboard;
@@ -109,7 +125,6 @@ async function sendNode(bot, chatId, node, choices, battle) {
   } else if (choices && choices.length > 0) {
     keyboard = buildChoiceKeyboard(choices);
   } else {
-    // Leaf / end-of-chapter node — no buttons
     keyboard = undefined;
   }
 
@@ -137,12 +152,73 @@ async function renderNode(bot, chatId, nodeKey) {
   await sendNode(bot, chatId, node, choices, battle);
   return { node, choices, battle };
 }
+
 // ─── Advance player and immediately render the next node ──────────────────────
-// Used by botFight.js after a story battle concludes.
 async function advanceAndRender(bot, chatId, playerId, nextNodeKey) {
   await advancePlayer(playerId, nextNodeKey);
   await renderNode(bot, chatId, nextNodeKey);
 }
+
+// ─── Fetch the story_battles row for a battle node ───────────────────────────
+async function getBattleByNodeKey(nodeKey) {
+  return db.queryOne(
+    `SELECT sb.*
+       FROM story_battles sb
+       JOIN story_nodes   sn ON sn.id = sb.node_id
+      WHERE sn.node_key = ?`,
+    [nodeKey]
+  );
+}
+
+// ─── Update bot_cards_json for a battle node ─────────────────────────────────
+// cardType: 'idc' | 'plc' | 'skl'
+// cardId:   the new card ID to apply
+// IDC replaces the single idc field.
+// PLC / SKL push into their respective arrays (no duplicates).
+async function linkCardToBattle(nodeKey, cardType, cardId) {
+  const battle = await getBattleByNodeKey(nodeKey);
+  if (!battle) throw new Error(`No battle found for node key: ${nodeKey}`);
+
+  let cards;
+  try {
+    cards = JSON.parse(battle.bot_cards_json || '{}');
+  } catch {
+    cards = {};
+  }
+
+  // Ensure defaults
+  if (!cards.idc) cards.idc = null;
+  if (!Array.isArray(cards.plc)) cards.plc = [];
+  if (!Array.isArray(cards.skl)) cards.skl = [];
+
+  if (cardType === 'idc') {
+    cards.idc = cardId;
+  } else if (cardType === 'plc') {
+    if (!cards.plc.includes(cardId)) cards.plc.push(cardId);
+  } else if (cardType === 'skl') {
+    if (!cards.skl.includes(cardId)) cards.skl.push(cardId);
+  } else {
+    throw new Error(`Unknown card type: ${cardType}`);
+  }
+
+  await db.query(
+    `UPDATE story_battles SET bot_cards_json = ? WHERE id = ?`,
+    [JSON.stringify(cards), battle.id]
+  );
+
+  return cards; // Return updated state for confirmation message
+}
+
+// ─── Fetch (or create) the "Bot System" player — used as owner of monster cards
+// Expects a player row with player_code = 'BOT_SYSTEM' to exist.
+async function getBotSystemPlayerId() {
+  const row = await db.queryOne(
+    `SELECT id FROM players WHERE player_code = 'BOT_SYSTEM' LIMIT 1`
+  );
+  if (!row) throw new Error('BOT_SYSTEM player not found. Create it in the DB first.');
+  return row.id;
+}
+
 module.exports = {
   getNode,
   getChoices,
@@ -152,5 +228,8 @@ module.exports = {
   markSeasonComplete,
   renderNode,
   storyCaption,
-  advanceAndRender
+  advanceAndRender,
+  getBattleByNodeKey,
+  linkCardToBattle,
+  getBotSystemPlayerId,
 };

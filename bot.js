@@ -28,6 +28,7 @@ const economyCmd = require('./commands/economyCommands');
 const shopCommands = require('./commands/shopCommands');
 const craftingCommands = require('./commands/craftingCommands');
 const storyManager = require('./commands/storyManager');
+const cardCharacter = require('./commands/cardCharacter');
 
 // Handlers
 const identityCard = require('./handlers/identityCard');
@@ -103,6 +104,7 @@ economyCmd.register(bot);
 shopCommands.register(bot);
 craftingCommands.register(bot);
 storyManager.register(bot);
+cardCharacter.register(bot);
 
 bot.on('callback_query', async (query) => {
   const { data, message, from } = query;
@@ -119,7 +121,13 @@ bot.on('callback_query', async (query) => {
   if (data.startsWith('bcm_')) return botCardManager.handleCallback(bot, query);
   if (data.startsWith('story_choice_')) return storyManager.handleChoiceCallback(bot, query);
   if (data.startsWith('story_battle_')) return storyManager.handleBattleCallback(bot, query);
-
+  if (data.startsWith('mc_type_')) return await storyManager.handleMonsterCardTypeCallback(bot, query);
+  if (data.startsWith('mc_plctype_')) return await storyManager.handleMonsterCardPlcTypeCallback(bot, query);
+  // أزرار صناعة شخصيات الأنمي
+  if (data.startsWith('cc_type_')) return await cardCharacter.handleCardTypeCallback(bot, query);
+  if (data.startsWith('cc_plctype_')) return await cardCharacter.handlePlcTypeCallback(bot, query);
+  if (data.startsWith('cc_skltype_')) return await cardCharacter.handleSklTypeCallback(bot, query);
+  if (data.startsWith('cc_skldur_')) return await cardCharacter.handleSklDurCallback(bot, query);
   if (data === 'panel_identity') return identityCard.startIdentityCardCreation(bot, chatId, tid);
   if (data === 'panel_play') return playCard.startPlayCardCreation(bot, chatId, tid);
   if (data === 'panel_skill') return skillCard.startSkillCardCreation(bot, chatId, tid);
@@ -174,32 +182,35 @@ bot.on('message', async (msg) => {
     try {
       const decodedCardId = await extractCardIdFromPhoto(bot, msg);
 
+      // 1. التوجيه للمضاربات (Fights)
       if (activeSession?.action === 'bot_fight') {
-        if (!decodedCardId) {
-          return bot.sendMessage(chatId, '⚠️ لم أتمكن من قراءة البطاقة من الصورة. أرسل ID كنص أو أعد إرسال صورة QR بوضوح.');
-        }
+        if (!decodedCardId) return bot.sendMessage(chatId, '⚠️ لم أتمكن من قراءة البطاقة من الصورة.');
         return botFight.handleFightMessage(bot, msg, decodedCardId);
       }
-
       if (activeSession?.action === 'pvp_fight') {
-        if (!decodedCardId) {
-          return bot.sendMessage(chatId, '⚠️ لم أتمكن من قراءة البطاقة من الصورة. أرسل ID كنص أو أعد إرسال صورة QR بوضوح.');
-        }
+        if (!decodedCardId) return bot.sendMessage(chatId, '⚠️ لم أتمكن من قراءة البطاقة من الصورة.');
         return pvpCmd.handleFightMessage(bot, msg, decodedCardId);
       }
+      if (activeSession?.action === 'loot_fight') {
+        if (!decodedCardId) return bot.sendMessage(chatId, '⚠️ لم أتمكن من قراءة البطاقة من الصورة.');
+        return lootPvpCmd.handleFightMessage(bot, msg, decodedCardId);
+      }
 
-      // FIX 4: if inside any other session and a QR was decoded, inject it as text
-      // and fall through to the session handlers below instead of silently returning.
-      // Only return early if no QR was found (photo is irrelevant to the session).
+      // 2. التوجيه للـ Wizards (صناعة الكوارط)
+      if (activeSession?.action === 'monster_card') {
+        if (!decodedCardId) return; // صور عادية بلا QR نتجاهلوها هنا
+        msg.text = decodedCardId;
+        return await storyManager.handleMonsterCardStep(bot, msg);
+      }
+
+      // 3. السيسشنز العادية (باقي الأنواع)
       if (activeSession) {
         if (!decodedCardId) return;
         msg.text = decodedCardId;
         text = decodedCardId;
-        // fall through ↓
       } else {
-        if (!decodedCardId) {
-          return bot.sendMessage(chatId, '⚠️ لم أتمكن من قراءة QR Code.');
-        }
+        // البحث العادي خارج أي سيسشن
+        if (!decodedCardId) return bot.sendMessage(chatId, '⚠️ لم أتمكن من قراءة QR Code.');
         return cardLookup.lookupCard(bot, chatId, decodedCardId);
       }
     } catch (err) {
@@ -223,7 +234,7 @@ bot.on('message', async (msg) => {
   // --- معالجة الجلسات النشطة (Sessions) ---
   if (session.hasActiveSession(tid)) {
     const { action } = session.getSession(tid);
-    const sessionCardId = extractCardId(text); // نسميوها سمية مختلفة باش ميتوقعش تداخل
+    const sessionCardId = extractCardId(text); 
 
     try {
       if (action === 'login') return await loginCmd.handleLoginStep(bot, msg);
@@ -244,9 +255,10 @@ bot.on('message', async (msg) => {
       // نزال النهب (Loot PvP)
       if (action === 'awaiting_stakes') return await lootPvpCmd.handleStakesInput(bot, msg);
       if (action === 'loot_fight') return await lootPvpCmd.handleFightMessage(bot, msg, sessionCardId);
-      
+      if (action === 'monster_card') return await storyManager.handleMonsterCardStep(bot, msg);
       if (action === 'setimg') return await setImgCmd.handleStep(bot, msg);
       if (action === 'use_enhancer') return await shopCommands.handleUseStep(bot, msg);
+      if (action === 'char_card_wizard') return await cardCharacter.handleCharCardStep(bot, msg);
       
       // حماية: إذا كان هناك سيسشن، نخرج دائماً هنا لكي لا نصل للـ Lookup
       return; 

@@ -48,6 +48,31 @@ async function loadBotCards(level) {
   return { identity, playCards, weaponCards, skillCards };
 }
 
+// ─── Load story bot cards from scripted battle JSON ──────────────────────────
+// botCardsJson shape: { idc: 'IDC-XXXXX', plc: ['PLC-XXXXX', ...], skl: ['SKL-XXXXX', ...] }
+async function loadStoryBotCards(botCardsJson) {
+  const { idc: idcId, plc: plcIds = [], skl: sklIds = [] } = JSON.parse(botCardsJson);
+
+  const identity = await db.queryOne('SELECT * FROM identity_cards WHERE card_id = ?', [idcId]);
+  if (!identity) return null;
+
+  const playCards  = plcIds.length > 0
+    ? await db.query(
+        `SELECT * FROM play_cards WHERE card_id IN (${plcIds.map(() => '?').join(', ')})`,
+        plcIds
+      )
+    : [];
+
+  const skillCards = sklIds.length > 0
+    ? await db.query(
+        `SELECT * FROM skill_cards WHERE card_id IN (${sklIds.map(() => '?').join(', ')})`,
+        sklIds
+      )
+    : [];
+
+  return { identity, playCards, weaponCards: [], skillCards };
+}
+
 async function loadPlayerCards(playerId) {
   const identity    = await db.queryOne('SELECT * FROM identity_cards WHERE player_id = ?', [playerId]);
   if (!identity) return null;
@@ -119,10 +144,26 @@ function hpLine(fight) {
 }
 
 // ─── Check win / lose ─────────────────────────────────────────────────────────
-// ─── Check win / lose ─────────────────────────────────────────────────────────
 async function checkWin(bot, chatId, fight) {
-  // 1. حالة فوز اللاعب
+  // ── 1. Player wins ─────────────────────────────────────────────────────────
   if (fight.bot.currentHp <= 0) {
+
+    // ── Story Fight branch ──
+    if (fight.isStory) {
+      await bot.sendMessage(chatId,
+        `\`\`\`\n◈ ═══════════════════════ ◈\n\n` +
+        `⚔️  النصر...\n\n` +
+        `لقد أثبتت قدرتك وهزمت العدو.\n` +
+        `الطريق إلى الأمام مفتوح الآن.\n\n` +
+        `◈ ═══════════════════════ ◈\n\`\`\``,
+        { parse_mode: 'Markdown' }
+      );
+      _endFight(chatId, fight.playerTelegramId);
+      await storyEngine.advanceAndRender(bot, chatId, fight.playerId, fight.victoryNode);
+      return true;
+    }
+
+    // ── Standard Fight branch ──
     const idealReward = fight.botLevel * 50;
     const mgReward = await economy.rewardPlayerFromCity(
       fight.playerId, chatId, idealReward, 'فوز ضد KimiBot'
@@ -131,7 +172,7 @@ async function checkWin(bot, chatId, fight) {
       ? `\n💰 مكافأة المدينة: +${mgReward} MG`
       : `\n⚠️ صندوق مدينتك فارغ، لم تحصل على مكافأة MG!`;
 
-    // ── غنائم نزال النهب (Loot Drop) ──
+    // Loot drop
     const lootSource = `bot_level_${fight.botLevel}`;
     const drops      = await crafting.getCombatLoot(lootSource);
     let lootMsg      = '';
@@ -156,22 +197,38 @@ async function checkWin(bot, chatId, fight) {
     return true;
   }
 
-  // 2. حالة فوز البوت (خسارة اللاعب)
+  // ── 2. Bot wins (player loses) ─────────────────────────────────────────────
   if (fight.player.currentHp <= 0) {
+
+    // ── Story Fight branch ──
+    if (fight.isStory) {
+      await bot.sendMessage(chatId,
+        `\`\`\`\n◈ ═══════════════════════ ◈\n\n` +
+        `💀  السقوط...\n\n` +
+        `لم تكن قوتك كافية هذه المرة.\n` +
+        `لكن الظلام لن يكون نهايتك.\n\n` +
+        `◈ ═══════════════════════ ◈\n\`\`\``,
+        { parse_mode: 'Markdown' }
+      );
+      _endFight(chatId, fight.playerTelegramId);
+      await storyEngine.advanceAndRender(bot, chatId, fight.playerId, fight.defeatNode);
+      return true;
+    }
+
+    // ── Standard Fight branch ──
     await bot.sendMessage(chatId,
       `💀 *KimiBot فاز!*\n❌ ${escapeMarkdown(fight.player.name)} هُزم! حاول مرة أخرى.`,
       { parse_mode: 'Markdown' }
     );
     await db.query('UPDATE players SET losses = losses + 1 WHERE telegram_id = ?', [fight.playerTelegramId]);
     await db.query('UPDATE players SET rank_points = GREATEST(0, rank_points - 15) WHERE telegram_id = ?', [fight.playerTelegramId]);
-    
+
     _endFight(chatId, fight.playerTelegramId);
     return true;
   }
 
   return false;
 }
-
 
 // ─── Win bonus: +100 × level to all stats ────────────────────────────────────
 async function applyWinBonus(bot, chatId, fight) {
@@ -272,6 +329,7 @@ async function startBotFight(bot, chatId, telegramId, requestedLevel = null) {
     playerTelegramId : telegramId,
     playerId         : player.id,
     botLevel,
+    isStory          : false,
     status           : 'countdown',
     turn             : null,
     round            : 0,
@@ -297,13 +355,9 @@ async function startBotFight(bot, chatId, telegramId, requestedLevel = null) {
     }
   });
 
-  // Set fight TTL (auto-cleanup after 15 min of inactivity)
   _setFightTimer(bot, chatId);
-
-  // Set player session so messages are routed here
   session.setSession(telegramId, 'bot_fight', 'race');
 
-  // Countdown
   await bot.sendMessage(chatId, `⚔️ *نزال مع KimiBot — المستوى ${botLevel}!*\n\nاستعد...`, { parse_mode: 'Markdown' });
   await sleep(900);
   await bot.sendMessage(chatId, '1️⃣...');
@@ -321,13 +375,113 @@ async function startBotFight(bot, chatId, telegramId, requestedLevel = null) {
   const delay = Math.floor(Math.random() * 4000) + 1000;
   setTimeout(async () => {
     const f = fights.get(chatId);
-    if (!f || f.status !== 'race') return; // player already sent theirs
+    if (!f || f.status !== 'race') return;
     f.status = 'waiting_player_identity';
-    f.turn   = 'bot'; // bot sent first → bot attacks first
+    f.turn   = 'bot';
 
     const ic = f.bot.identityCard;
     await sendCardVisual(bot, chatId, ic,
       `🤖 *KimiBot* أرسل بطاقته التعريفية أولاً!\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `🆔 \`${ic.card_id}\`\n` +
+      `🎭 الاسم: *${escapeMarkdown(ic.name)}*\n` +
+      `❤️ HP: ${ic.hp}  ⚔️ ATK: ${ic.atk}  ✨ Magic: ${ic.magic || 0}\n` +
+      `🛡️ DEF: ${ic.def}  💨 SPD: ${ic.spd}  🎯 Accuracy: ${ic.accuracy}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `📤 الآن أرسل بطاقتك التعريفية للمتابعة!`
+    );
+  }, delay);
+}
+
+// ─── START STORY BATTLE ───────────────────────────────────────────────────────
+// Called from storyManager.handleBattleCallback after Phase 2 wiring.
+// battleData is the row from story_battles:
+//   { bot_cards_json, victory_node_key, defeat_node_key }
+async function startStoryBattle(bot, chatId, telegramId, battleData) {
+  if (fights.has(chatId)) {
+    return bot.sendMessage(chatId, '⚠️ هناك نزال جارٍ حالياً. انتظر حتى ينتهي.');
+  }
+
+  const player = await db.queryOne(
+    `SELECT p.*, ic.id AS ic_db_id FROM players p
+     LEFT JOIN identity_cards ic ON ic.player_id = p.id
+     WHERE p.telegram_id = ?`,
+    [telegramId]
+  );
+  if (!player)          return bot.sendMessage(chatId, '❌ يجب أن تكون مسجلاً ($login) أولاً.');
+  if (!player.ic_db_id) return bot.sendMessage(chatId, '❌ يجب أن تمتلك بطاقة تعريفية أولاً.');
+
+  const botCards = await loadStoryBotCards(battleData.bot_cards_json);
+  if (!botCards) return bot.sendMessage(chatId, '❌ بطاقات العدو في هذا النزال غير مُعدَّة بشكل صحيح.');
+
+  // Create fight state
+  fights.set(chatId, {
+    playerTelegramId : telegramId,
+    playerId         : player.id,
+    botLevel         : 1,           // Story fights don't grant level progression
+    isStory          : true,
+    victoryNode      : battleData.victory_node_key,
+    defeatNode       : battleData.defeat_node_key,
+    status           : 'countdown',
+    turn             : null,
+    round            : 0,
+    lastBotCard      : null,
+    player: {
+      name         : player.character_name,
+      identityCard : null,
+      currentHp    : 0,
+      playCards    : [],
+      weaponCards  : [],
+      skillCards   : [],
+      usedCards    : new Set(),
+      effects      : []
+    },
+    bot: {
+      identityCard : botCards.identity,
+      currentHp    : botCards.identity.hp,
+      playCards    : botCards.playCards,
+      weaponCards  : botCards.weaponCards,
+      skillCards   : botCards.skillCards,
+      usedCards    : new Set(),
+      effects      : []
+    }
+  });
+
+  _setFightTimer(bot, chatId);
+  session.setSession(telegramId, 'bot_fight', 'race');
+
+  // Cinematic story intro
+  await bot.sendMessage(chatId,
+    `\`\`\`\n◈ ═══════════════════════ ◈\n\n` +
+    `⚔️  نزال القصة بدأ...\n\n` +
+    `العدو يقف أمامك.\n` +
+    `أثبت قدرتك.\n\n` +
+    `◈ ═══════════════════════ ◈\n\`\`\``,
+    { parse_mode: 'Markdown' }
+  );
+  await sleep(900);
+  await bot.sendMessage(chatId, '1️⃣...');
+  await sleep(900);
+  await bot.sendMessage(chatId, '2️⃣...');
+  await sleep(900);
+  await bot.sendMessage(chatId, '3️⃣...');
+  await sleep(500);
+
+  const fight = fights.get(chatId);
+  fight.status = 'race';
+  await bot.sendMessage(chatId, `📤 *أرسل بطاقتك التعريفية الآن!*`, { parse_mode: 'Markdown' });
+
+  // Bot races: sends its card after a random 1-5 second delay
+  const delay = Math.floor(Math.random() * 4000) + 1000;
+  setTimeout(async () => {
+    const f = fights.get(chatId);
+    if (!f || f.status !== 'race') return;
+    f.status = 'waiting_player_identity';
+    f.turn   = 'bot';
+
+    const ic = f.bot.identityCard;
+    await sendCardVisual(bot, chatId, ic,
+      `🤖 *العدو* أرسل بطاقته التعريفية أولاً!\n\n` +
       `━━━━━━━━━━━━━━━━━━━━━━\n` +
       `🆔 \`${ic.card_id}\`\n` +
       `🎭 الاسم: *${escapeMarkdown(ic.name)}*\n` +
@@ -349,7 +503,7 @@ async function handleFightMessage(bot, msg, cardId) {
   // Only the fight's player can interact
   if (telegramId !== fight.playerTelegramId) return false;
 
-  _setFightTimer(bot, chatId); // reset 15-min inactivity timer on every valid move
+  _setFightTimer(bot, chatId); // reset inactivity timer on every valid move
 
   // ── Identity card ──────────────────────────────────────────────────────────
   if (['race', 'waiting_player_identity'].includes(fight.status)) {
@@ -445,9 +599,7 @@ function cancelFight(chatId) {
   if (fightTimers.has(chatId)) { clearTimeout(fightTimers.get(chatId)); fightTimers.delete(chatId); }
 }
 
-// -----------------------------------------------------------------------------
-// Unified Combat Engine overrides
-// -----------------------------------------------------------------------------
+// ─── Combat engine helpers ────────────────────────────────────────────────────
 
 async function sendCombatLines(bot, chatId, lines) {
   const payload = (lines || []).filter(Boolean);
@@ -679,7 +831,7 @@ async function _handlePlayerResponse(bot, chatId, fight, cardId) {
     `👤 *${escapeMarkdown(fight.player.name)}* يرد بـ: *${escapeMarkdown(card.name)}*`
   ]);
 
-  // ── Phase 1: resolve bot's attack (player's card acts as defense or not) ──
+  // ── Phase 1: resolve bot's attack ────────────────────────────────────────
   const botAttackCard = fight.lastBotCard;
   fight.lastBotCard = null;
 
@@ -737,6 +889,7 @@ async function _handlePlayerResponse(bot, chatId, fight, cardId) {
 
 module.exports = {
   startBotFight,
+  startStoryBattle,
   handleFightMessage,
   hasFight,
   getFight,

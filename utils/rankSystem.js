@@ -200,6 +200,37 @@ async function applyRank(targetPlayerCode, newRank) {
   );
 }
 
+// ============================================================
+// Special Roles Track
+// ============================================================
+
+// Story admin: Overlord, Emperor, Prince, OR anyone with is_rawi = true
+async function isStoryAdmin(telegramId) {
+  if (permissions.isMainAdmin(telegramId)) return true;
+
+  const player = await db.queryOne(
+    'SELECT system_rank, is_rawi FROM players WHERE telegram_id = ?',
+    [telegramId]
+  );
+  if (!player) return false;
+
+  const rank = player.system_rank || 'none';
+  return rank === 'emperor' || rank === 'prince' || !!player.is_rawi;
+}
+
+// Can assign special roles: Overlord or Emperor only
+async function canAssignSpecialRoles(telegramId) {
+  if (permissions.isMainAdmin(telegramId)) return true;
+
+  const player = await db.queryOne(
+    'SELECT system_rank FROM players WHERE telegram_id = ?',
+    [telegramId]
+  );
+  if (!player) return false;
+
+  return (player.system_rank || '') === 'emperor';
+}
+
 module.exports = {
   getRpRank,
   RP_THRESHOLDS,
@@ -218,4 +249,6 @@ module.exports = {
   checkAndIncrementCooldown,
   SETRANK_DAILY_LIMIT,
   applyRank,
+  isStoryAdmin,
+  canAssignSpecialRoles,
 };
