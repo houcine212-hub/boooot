@@ -170,11 +170,9 @@ async function getBattleByNodeKey(nodeKey) {
   );
 }
 
-// ─── Update bot_cards_json for a battle node ─────────────────────────────────
+// ─── Update bot_cards_json for a story battle node ───────────────────────────
 // cardType: 'idc' | 'plc' | 'skl'
 // cardId:   the new card ID to apply
-// IDC replaces the single idc field.
-// PLC / SKL push into their respective arrays (no duplicates).
 async function linkCardToBattle(nodeKey, cardType, cardId) {
   const battle = await getBattleByNodeKey(nodeKey);
   if (!battle) throw new Error(`No battle found for node key: ${nodeKey}`);
@@ -186,7 +184,6 @@ async function linkCardToBattle(nodeKey, cardType, cardId) {
     cards = {};
   }
 
-  // Ensure defaults
   if (!cards.idc) cards.idc = null;
   if (!Array.isArray(cards.plc)) cards.plc = [];
   if (!Array.isArray(cards.skl)) cards.skl = [];
@@ -206,17 +203,130 @@ async function linkCardToBattle(nodeKey, cardType, cardId) {
     [JSON.stringify(cards), battle.id]
   );
 
-  return cards; // Return updated state for confirmation message
+  return cards;
 }
 
-// ─── Fetch (or create) the "Bot System" player — used as owner of monster cards
-// Expects a player row with player_code = 'BOT_SYSTEM' to exist.
+// ─── Fetch (or create) the "Bot System" player ───────────────────────────────
 async function getBotSystemPlayerId() {
   const row = await db.queryOne(
     `SELECT id FROM players WHERE player_code = 'BOT_SYSTEM' LIMIT 1`
   );
   if (!row) throw new Error('BOT_SYSTEM player not found. Create it in the DB first.');
   return row.id;
+}
+
+// ─── Link a card to a tutorial_boss_cards row ────────────────────────────────
+//
+// bossType : 'nitron' | 'monster_x'  (must match tutorial_boss_cards.boss_type)
+// cardType : 'idc' | 'plc' | 'skl' | 'wpn'
+// cardId   : e.g. 'IDC-12345'
+//
+// Logic:
+//   IDC → replaces idc_card_id directly.
+//   PLC / SKL / WPN → parsed from their JSON column, card is pushed (no duplicates),
+//                     then written back.
+//
+// Returns the final { idc, plc, skl, wpn } state for confirmation messages.
+// ─────────────────────────────────────────────────────────────────────────────
+async function linkCardToTutorialBoss(bossType, cardType, cardId) {
+  // 1. Fetch existing row (may not exist yet — wizard creates cards before the row)
+  const row = await db.queryOne(
+    `SELECT * FROM tutorial_boss_cards WHERE boss_type = ? LIMIT 1`,
+    [bossType]
+  );
+
+  // 2. Build current state — start empty if the row doesn't exist yet
+  const state = {
+    idc : row ? (row.idc_card_id ?? null)          : null,
+    plc : row ? safeParseJson(row.plc_ids, [])      : [],
+    skl : row ? safeParseJson(row.skl_ids, [])      : [],
+    wpn : row ? safeParseJson(row.wpn_ids, [])      : [],
+  };
+
+  // 3. Apply the change
+  if (cardType === 'idc') {
+    state.idc = cardId;
+  } else if (cardType === 'plc') {
+    if (!state.plc.includes(cardId)) state.plc.push(cardId);
+  } else if (cardType === 'skl') {
+    if (!state.skl.includes(cardId)) state.skl.push(cardId);
+  } else if (cardType === 'wpn') {
+    if (!state.wpn.includes(cardId)) state.wpn.push(cardId);
+  } else {
+    throw new Error(`Unknown card type: ${cardType}`);
+  }
+
+  // 4. Persist — upsert so the row is created automatically on first card
+  await db.query(
+    `INSERT INTO tutorial_boss_cards (boss_type, idc_card_id, plc_ids, skl_ids, wpn_ids)
+     VALUES (?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       idc_card_id = VALUES(idc_card_id),
+       plc_ids     = VALUES(plc_ids),
+       skl_ids     = VALUES(skl_ids),
+       wpn_ids     = VALUES(wpn_ids)`,
+    [
+      bossType,
+      state.idc,
+      JSON.stringify(state.plc),
+      JSON.stringify(state.skl),
+      JSON.stringify(state.wpn),
+    ]
+  );
+
+  // 5. Return final state for caller confirmation message
+  return state;
+}
+
+// ─── Safe JSON parser helper ──────────────────────────────────────────────────
+function safeParseJson(value, fallback) {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+// ─── Check if a boss type belongs to the tutorial system ─────────────────────
+function isTutorialBoss(bossType) {
+  return bossType === 'nitron' || bossType === 'monster_x';
+}
+
+// ─── Fetch the full IDC row currently linked to a node/boss ──────────────────
+// For story battle nodes  → reads idc from story_battles.bot_cards_json
+// For tutorial bosses     → reads idc_card_id from tutorial_boss_cards
+// Returns the full identity_cards row, or null if none is linked yet.
+async function getBattleIDC(nodeKey) {
+  if (isTutorialBoss(nodeKey)) {
+    const boss = await db.queryOne(
+      `SELECT idc_card_id FROM tutorial_boss_cards WHERE boss_type = ? LIMIT 1`,
+      [nodeKey]
+    );
+    if (!boss || !boss.idc_card_id) return null;
+    return db.queryOne(
+      `SELECT * FROM identity_cards WHERE card_id = ?`,
+      [boss.idc_card_id]
+    );
+  }
+
+  // Story battle node
+  const battle = await db.queryOne(
+    `SELECT sb.bot_cards_json
+       FROM story_battles sb
+       JOIN story_nodes   sn ON sn.id = sb.node_id
+      WHERE sn.node_key = ?`,
+    [nodeKey]
+  );
+  if (!battle) return null;
+
+  let cards;
+  try { cards = JSON.parse(battle.bot_cards_json || '{}'); } catch { cards = {}; }
+
+  if (!cards.idc) return null;
+  return db.queryOne(
+    `SELECT * FROM identity_cards WHERE card_id = ?`,
+    [cards.idc]
+  );
 }
 
 module.exports = {
@@ -231,5 +341,8 @@ module.exports = {
   advanceAndRender,
   getBattleByNodeKey,
   linkCardToBattle,
+  linkCardToTutorialBoss,
+  isTutorialBoss,
   getBotSystemPlayerId,
+  getBattleIDC,
 };

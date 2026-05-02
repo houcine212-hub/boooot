@@ -18,6 +18,7 @@ const engine      = require('../utils/storyEngine');
 const economy     = require('../utils/economy');
 const botFight    = require('../handlers/botFight');
 const session     = require('../middleware/sessionManager');
+const { sendQR } = require('../utils/qrHelper'); 
 
 const { generateIdentityCardId } = require('../utils/idGenerator');
 const { TOTAL_IDENTITY_POINTS, PLAY_TYPE_LABELS } = require('../utils/constants');
@@ -38,6 +39,16 @@ const STORY_ADMIN_ONLY =
 
 const NO_STORY_YET =
   '[ ＳＹＳＴＥＭ ] القصة لم تبدأ بعد، يرجى الانتظار حتى يفتح الإمبراطور الموسم الأول.';
+
+// ─── Tutorial Boss targets ────────────────────────────────────────────────────
+// Any nodeKey matching one of these is routed to tutorial_boss_cards instead
+// of story_battles.  Must stay in sync with engine.TUTORIAL_BOSS_TYPES.
+const TUTORIAL_BOSS_TYPES = new Set(['nitron', 'monster_x']);
+
+/** Human-readable label for display in confirmation messages. */
+function tutorialBossLabel(bossType) {
+  return bossType === 'nitron' ? '⚡ Nitron' : '👾 Monster X';
+}
 
 function split(text, sep = '|') {
   return text.split(sep).map(s => s.trim());
@@ -503,7 +514,13 @@ async function handleRemoveRawi(bot, msg) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MONSTER CARD WIZARD  —  $monsterCard [NodeKey]
+// MONSTER CARD WIZARD  —  $monsterCard [NodeKey | BossType]
+//
+// Unified entry point for both Story-Battle nodes and Tutorial Bosses.
+// • If [Target] is 'nitron' or 'monster_x'  → Tutorial Boss path
+//   (saves to tutorial_boss_cards, no story_nodes lookup required)
+// • Otherwise                                → Story Node path
+//   (existing behaviour: requires a battle node + story_battles row)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── Entry point ─────────────────────────────────────────────────────────────
@@ -511,14 +528,39 @@ async function handleMonsterCard(bot, msg) {
   const { chat: { id: chatId }, from: { id: tid }, text } = msg;
   if (!await guardAdmin(bot, chatId, tid)) return;
 
-  const nodeKey = (text || '').replace(/^\$monsterCard\s*/i, '').trim();
+  const nodeKey = (text || '').replace(/^\$monsterCard\s*/i, '').trim().toLowerCase();
   if (!nodeKey) {
     return bot.sendMessage(chatId,
-      '⚠️ الاستخدام: `$monsterCard [NodeKey]`',
+      '⚠️ الاستخدام: `$monsterCard [NodeKey]`\nمثال: `$monsterCard battle_1` أو `$monsterCard nitron`',
       { parse_mode: 'Markdown' }
     );
   }
 
+  // ── Tutorial Boss path ────────────────────────────────────────────────────
+  // Skip story_nodes / story_battles checks entirely for known boss targets.
+  if (TUTORIAL_BOSS_TYPES.has(nodeKey)) {
+    session.setSession(tid, 'monster_card', 'awaiting_card_category', { nodeKey });
+
+    return bot.sendMessage(chatId,
+      systemPanel(
+        `🔮 إنشاء بطاقة وحش\n` +
+        `🎯 الهدف: Tutorial Boss — ${tutorialBossLabel(nodeKey)}\n\n` +
+        `اختر نوع البطاقة:`
+      ),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '🪪 هوية (IDC)',  callback_data: `mc_type_idc_${nodeKey}`  },
+            { text: '⚔️ لعب (PLC)',   callback_data: `mc_type_plc_${nodeKey}`  },
+            { text: '🌟 مهارة (SKL)', callback_data: `mc_type_skl_${nodeKey}`  },
+          ]]
+        }
+      }
+    );
+  }
+
+  // ── Story Node path ───────────────────────────────────────────────────────
   const node = await db.queryOne(
     `SELECT id, node_type FROM story_nodes WHERE node_key = ?`,
     [nodeKey]
@@ -585,9 +627,44 @@ async function handleMonsterCardTypeCallback(bot, query) {
   }
 
   if (category === 'plc') {
-    session.setSession(tid, 'monster_card', 'mc_plc_awaiting_type', { nodeKey, cardCategory: 'plc' });
+    // Fetch the IDC currently linked to this node/boss — needed for stat caps
+    const linkedIDC = await engine.getBattleIDC(nodeKey);
+    if (!linkedIDC) {
+      return bot.sendMessage(chatId,
+        systemPanel(
+          `❌ لا توجد بطاقة هوية (IDC) مرتبطة بـ [${nodeKey}] بعد.\n\n` +
+          `يجب إنشاء IDC للوحش أولاً قبل إضافة PLC.\n` +
+          `استخدم \`$monsterCard ${nodeKey}\` واختر 🪪 هوية (IDC).`
+        ),
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    session.setSession(tid, 'monster_card', 'mc_plc_awaiting_type', {
+      nodeKey,
+      cardCategory:        'plc',
+      identity_card_id:    linkedIDC.id,
+      idc_card_id_str:     linkedIDC.card_id,
+      // Real available caps drawn directly from the monster's IDC balance
+      ic_atk:      linkedIDC.available_atk      ?? 0,
+      ic_magic:    linkedIDC.available_magic     ?? 0,
+      ic_def:      linkedIDC.available_def       ?? 0,
+      ic_spd:      linkedIDC.available_spd       ?? 0,
+      ic_accuracy: linkedIDC.available_accuracy  ?? 0,
+    });
+
     return bot.sendMessage(chatId,
-      systemPanel(`⚔️ بطاقة لعب الوحش\n🔑 Node: ${nodeKey}\n\nاختر نوع بطاقة اللعب:`),
+      systemPanel(
+        `⚔️ بطاقة لعب الوحش\n🔑 Node: ${nodeKey}\n` +
+        `🪪 IDC: ${linkedIDC.card_id} — ${linkedIDC.name}\n\n` +
+        `📊 الإحصائيات المتاحة:\n` +
+        `  ⚔️ ATK: ${linkedIDC.available_atk ?? 0}\n` +
+        `  ✨ Magic: ${linkedIDC.available_magic ?? 0}\n` +
+        `  🛡️ DEF: ${linkedIDC.available_def ?? 0}\n` +
+        `  💨 SPD: ${linkedIDC.available_spd ?? 0}\n` +
+        `  🎯 Accuracy: ${linkedIDC.available_accuracy ?? 0}\n\n` +
+        `اختر نوع بطاقة اللعب:`
+      ),
       {
         parse_mode: 'Markdown',
         reply_markup: {
@@ -625,13 +702,11 @@ async function handleMonsterCardPlcTypeCallback(bot, query) {
 
   await bot.answerCallbackQuery(query.id);
 
-  // Monster PLCs use a large cap — no real identity card to constrain them
-  const CAP = 99999;
-
+  // Real caps come from the monster IDC's available stats, stored in the session
+  // when the admin selected PLC from the type menu.
   session.setSession(tid, 'monster_card', 'mc_plc_awaiting_name', {
     ...s.data,
     plcType,
-    ic_atk: CAP, ic_magic: CAP, ic_def: CAP, ic_spd: CAP, ic_accuracy: CAP,
     collected: {}
   });
 
@@ -775,6 +850,8 @@ async function _saveMonsterIdc(bot, chatId, tid, data) {
   const { nodeKey, cardName, stats, magicCap } = data;
   const { hp, atk, def, spd, accuracy }        = stats;
 
+  const isBoss = engine.isTutorialBoss(nodeKey);
+
   let botPlayerId;
   try {
     botPlayerId = await engine.getBotSystemPlayerId();
@@ -810,9 +887,12 @@ async function _saveMonsterIdc(bot, chatId, tid, data) {
     ]
   );
 
+  // ── Route to the correct linker ───────────────────────────────────────────
   let updatedCards;
   try {
-    updatedCards = await engine.linkCardToBattle(nodeKey, 'idc', cardId);
+    updatedCards = isBoss
+      ? await engine.linkCardToTutorialBoss(nodeKey, 'idc', cardId)
+      : await engine.linkCardToBattle(nodeKey, 'idc', cardId);
   } catch (e) {
     session.clearSession(tid);
     return bot.sendMessage(chatId,
@@ -822,28 +902,50 @@ async function _saveMonsterIdc(bot, chatId, tid, data) {
   }
 
   session.clearSession(tid);
-  return bot.sendMessage(chatId,
+
+  // ── Build confirmation message ────────────────────────────────────────────
+  const targetLine = isBoss
+    ? `🎯 Tutorial Boss: ${tutorialBossLabel(nodeKey)}`
+    : `🔑 Node: [${nodeKey}]`;
+
+  const cardsLine = isBoss
+    ? `📦 tutorial_boss_cards الحالية:\n` +
+      `  IDC → ${updatedCards.idc || '—'}\n` +
+      `  PLC → [${(updatedCards.plc || []).join(', ') || '—'}]\n` +
+      `  SKL → [${(updatedCards.skl || []).join(', ') || '—'}]\n` +
+      `  WPN → [${(updatedCards.wpn || []).join(', ') || '—'}]`
+    : `📦 bot_cards الحالية:\n` +
+      `  IDC → ${updatedCards.idc}\n` +
+      `  PLC → [${updatedCards.plc.join(', ') || '—'}]\n` +
+      `  SKL → [${updatedCards.skl.join(', ') || '—'}]`;
+
+  const successMsg = isBoss
+    ? `✅ ${cardName} linked to Tutorial Boss ${tutorialBossLabel(nodeKey)} successfully!`
+    : `[ ＳＹＳＴＥＭ ] تم إنشاء البطاقة وربطها تلقائياً\nبوحش المشهد [${nodeKey}] بنجاح!`;
+
+  await bot.sendMessage(chatId,
     systemPanel(
-      `[ ＳＹＳＴＥＭ ] تم إنشاء البطاقة وربطها تلقائياً\n` +
-      `بوحش المشهد [${nodeKey}] بنجاح!\n\n` +
+      `${successMsg}\n\n` +
+      `${targetLine}\n\n` +
       `🪪 نوع: هوية (IDC)\n` +
       `🆔 ${cardId}\n` +
       `📛 ${cardName}\n\n` +
       `❤️ HP: ${hp}  ⚔️ ATK: ${atk}  ✨ Magic: ${magicCap}\n` +
       `🛡️ DEF: ${def}  💨 SPD: ${spd}  🎯 Acc: ${accuracy}\n\n` +
       `💰 مستخدم: ${used}/${TOTAL_IDENTITY_POINTS}\n\n` +
-      `📦 bot_cards الحالية:\n` +
-      `  IDC → ${updatedCards.idc}\n` +
-      `  PLC → [${updatedCards.plc.join(', ') || '—'}]\n` +
-      `  SKL → [${updatedCards.skl.join(', ') || '—'}]`
+      cardsLine
     ),
     { parse_mode: 'Markdown' }
   );
+  try { await sendQR(bot, chatId, cardId); } catch (e) {}
 }
 
 async function _saveMonsterPlc(bot, chatId, tid, data) {
-  const { nodeKey, cardName, plcType, collected } = data;
+  const { nodeKey, cardName, plcType, collected, identity_card_id, idc_card_id_str } = data;
 
+  const isBoss = engine.isTutorialBoss(nodeKey);
+
+  // Resolve the numeric player ID that owns the monster's IDC
   let botPlayerId;
   try {
     botPlayerId = await engine.getBotSystemPlayerId();
@@ -855,29 +957,61 @@ async function _saveMonsterPlc(bot, chatId, tid, data) {
     );
   }
 
-  let cardId;
-  try {
-    if (createPlayCardWithAllocation) {
-      const created = await createPlayCardWithAllocation({
-        playerId:       botPlayerId,
-        identityCardId: null,
-        cardName,
-        type:           plcType,
-        stats:          collected,
-        skipAllocation: true
-      });
-      cardId = created.cardId;
-    } else {
-      throw new Error('service not available');
-    }
-  } catch (err) {
-    // Fallback: direct insert — monster PLCs bypass identity-card allocation
-    cardId = await _insertMonsterPlcDirect(botPlayerId, cardName, plcType, collected);
+  // Guard: identity_card_id must be present — satisfies the FK constraint
+  // and lets the allocation service deduct stats from the monster's IDC balance.
+  if (!identity_card_id) {
+    session.clearSession(tid);
+    return bot.sendMessage(chatId,
+      systemPanel(
+        `❌ لم يتم تحديد بطاقة الهوية للوحش.\n` +
+        `أعد بدء الـ wizard بـ \`$monsterCard ${nodeKey}\`.`
+      ),
+      { parse_mode: 'Markdown' }
+    );
   }
 
+  if (!createPlayCardWithAllocation) {
+    session.clearSession(tid);
+    return bot.sendMessage(chatId,
+      systemPanel(`❌ خدمة إنشاء PLC غير متاحة. تواصل مع المطور.`),
+      { parse_mode: 'Markdown' }
+    );
+  }
+
+  let cardId;
+  try {
+    const created = await createPlayCardWithAllocation({
+      playerId:       botPlayerId,
+      identityCardId: identity_card_id,   // numeric FK → links PLC to monster IDC + deducts stats
+      cardName,
+      type:           plcType,
+      stats:          collected,
+    });
+    cardId = created.cardId;
+  } catch (err) {
+    session.clearSession(tid);
+    if (InsufficientPlayCardResourcesError && err instanceof InsufficientPlayCardResourcesError) {
+      return bot.sendMessage(chatId,
+        systemPanel(
+          `❌ نقاط IDC الوحش غير كافية لهذه البطاقة.\n\n` +
+          `تأكد أن الإحصائيات التي أدخلتها لا تتجاوز الرصيد المتاح في IDC الوحش.`
+        ),
+        { parse_mode: 'Markdown' }
+      );
+    }
+    console.error('[monsterCard] _saveMonsterPlc error:', err.message);
+    return bot.sendMessage(chatId,
+      systemPanel(`❌ فشل إنشاء PLC: ${err.message}`),
+      { parse_mode: 'Markdown' }
+    );
+  }
+
+  // ── Route to the correct linker ───────────────────────────────────────────
   let updatedCards;
   try {
-    updatedCards = await engine.linkCardToBattle(nodeKey, 'plc', cardId);
+    updatedCards = isBoss
+      ? await engine.linkCardToTutorialBoss(nodeKey, 'plc', cardId)
+      : await engine.linkCardToBattle(nodeKey, 'plc', cardId);
   } catch (e) {
     session.clearSession(tid);
     return bot.sendMessage(chatId,
@@ -889,42 +1023,50 @@ async function _saveMonsterPlc(bot, chatId, tid, data) {
   const statsText = Object.entries(collected).map(([k, v]) => `${k.toUpperCase()}: ${v}`).join('  ');
 
   session.clearSession(tid);
-  return bot.sendMessage(chatId,
+
+  // ── Build confirmation message ────────────────────────────────────────────
+  const targetLine = isBoss
+    ? `🎯 Tutorial Boss: ${tutorialBossLabel(nodeKey)}`
+    : `🔑 Node: [${nodeKey}]`;
+
+  const cardsLine = isBoss
+    ? `📦 tutorial_boss_cards الحالية:\n` +
+      `  IDC → ${updatedCards.idc || '—'}\n` +
+      `  PLC → [${(updatedCards.plc || []).join(', ') || '—'}]\n` +
+      `  SKL → [${(updatedCards.skl || []).join(', ') || '—'}]\n` +
+      `  WPN → [${(updatedCards.wpn || []).join(', ') || '—'}]`
+    : `📦 bot_cards الحالية:\n` +
+      `  IDC → ${updatedCards.idc || '—'}\n` +
+      `  PLC → [${updatedCards.plc.join(', ') || '—'}]\n` +
+      `  SKL → [${updatedCards.skl.join(', ') || '—'}]`;
+
+  const successMsg = isBoss
+    ? `✅ ${cardName} linked to Tutorial Boss ${tutorialBossLabel(nodeKey)} successfully!`
+    : `[ ＳＹＳＴＥＭ ] تم إنشاء البطاقة وربطها تلقائياً\nبوحش المشهد [${nodeKey}] بنجاح!`;
+
+  await bot.sendMessage(chatId,
     systemPanel(
-      `[ ＳＹＳＴＥＭ ] تم إنشاء البطاقة وربطها تلقائياً\n` +
-      `بوحش المشهد [${nodeKey}] بنجاح!\n\n` +
+      `${successMsg}\n\n` +
+      `${targetLine}\n\n` +
       `⚔️ نوع: بطاقة لعب (PLC) — ${PLAY_TYPE_LABELS[plcType]}\n` +
       `🆔 ${cardId}\n` +
       `📛 ${cardName}\n` +
+      `🔗 IDC: ${idc_card_id_str || identity_card_id}\n` +
       `${statsText}\n\n` +
-      `📦 bot_cards الحالية:\n` +
-      `  IDC → ${updatedCards.idc || '—'}\n` +
-      `  PLC → [${updatedCards.plc.join(', ') || '—'}]\n` +
-      `  SKL → [${updatedCards.skl.join(', ') || '—'}]`
+      cardsLine
     ),
     { parse_mode: 'Markdown' }
   );
-}
-
-async function _insertMonsterPlcDirect(playerId, cardName, type, stats) {
-  let cardId;
-  do {
-    cardId = generateIdentityCardId();
-  } while (await db.queryOne('SELECT id FROM play_cards WHERE card_id = ?', [cardId]));
-
-  const cols    = ['card_id', 'player_id', 'name', 'type', ...Object.keys(stats)];
-  const vals    = [cardId, playerId, cardName, type, ...Object.values(stats)];
-  const holders = cols.map(() => '?').join(', ');
-
-  await db.query(
-    `INSERT INTO play_cards (${cols.join(', ')}) VALUES (${holders})`,
-    vals
-  );
-
-  return cardId;
+  try {
+    await sendQR(bot, chatId, cardId);
+  } catch (e) {
+    console.error('[monsterCard] sendQR (PLC) failed:', e.message);
+  }
 }
 
 async function _linkMonsterSkl(bot, chatId, tid, nodeKey, sklId) {
+  const isBoss = engine.isTutorialBoss(nodeKey);
+
   const skill = await db.queryOne(`SELECT id FROM skill_cards WHERE card_id = ?`, [sklId]);
   if (!skill) {
     await bot.sendMessage(chatId,
@@ -934,9 +1076,12 @@ async function _linkMonsterSkl(bot, chatId, tid, nodeKey, sklId) {
     return;
   }
 
+  // ── Route to the correct linker ───────────────────────────────────────────
   let updatedCards;
   try {
-    updatedCards = await engine.linkCardToBattle(nodeKey, 'skl', sklId);
+    updatedCards = isBoss
+      ? await engine.linkCardToTutorialBoss(nodeKey, 'skl', sklId)
+      : await engine.linkCardToBattle(nodeKey, 'skl', sklId);
   } catch (e) {
     session.clearSession(tid);
     return bot.sendMessage(chatId,
@@ -946,19 +1091,38 @@ async function _linkMonsterSkl(bot, chatId, tid, nodeKey, sklId) {
   }
 
   session.clearSession(tid);
-  return bot.sendMessage(chatId,
-    systemPanel(
-      `[ ＳＹＳＴＥＭ ] تم إنشاء البطاقة وربطها تلقائياً\n` +
-      `بوحش المشهد [${nodeKey}] بنجاح!\n\n` +
-      `🌟 نوع: مهارة (SKL)\n` +
-      `🆔 ${sklId}\n\n` +
-      `📦 bot_cards الحالية:\n` +
+
+  // ── Build confirmation message ────────────────────────────────────────────
+  const targetLine = isBoss
+    ? `🎯 Tutorial Boss: ${tutorialBossLabel(nodeKey)}`
+    : `🔑 Node: [${nodeKey}]`;
+
+  const cardsLine = isBoss
+    ? `📦 tutorial_boss_cards الحالية:\n` +
+      `  IDC → ${updatedCards.idc || '—'}\n` +
+      `  PLC → [${(updatedCards.plc || []).join(', ') || '—'}]\n` +
+      `  SKL → [${(updatedCards.skl || []).join(', ') || '—'}]\n` +
+      `  WPN → [${(updatedCards.wpn || []).join(', ') || '—'}]`
+    : `📦 bot_cards الحالية:\n` +
       `  IDC → ${updatedCards.idc || '—'}\n` +
       `  PLC → [${updatedCards.plc.join(', ') || '—'}]\n` +
-      `  SKL → [${updatedCards.skl.join(', ') || '—'}]`
+      `  SKL → [${updatedCards.skl.join(', ') || '—'}]`;
+
+  const successMsg = isBoss
+    ? `✅ ${sklId} linked to Tutorial Boss ${tutorialBossLabel(nodeKey)} successfully!`
+    : `[ ＳＹＳＴＥＭ ] تم إنشاء البطاقة وربطها تلقائياً\nبوحش المشهد [${nodeKey}] بنجاح!`;
+
+  await bot.sendMessage(chatId,
+    systemPanel(
+      `${successMsg}\n\n` +
+      `${targetLine}\n\n` +
+      `🌟 نوع: مهارة (SKL)\n` +
+      `🆔 ${sklId}\n\n` +
+      cardsLine
     ),
     { parse_mode: 'Markdown' }
   );
+  try { await sendQR(bot, chatId, sklId); } catch (e) {}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1102,39 +1266,37 @@ function register(bot) {
     return handleDelBattle(bot, msg);
   });
 
-  // Monster Card Wizard
-  // البحث عن أمر $monsterCard مع جعل اسم النود اختيارياً لإظهار تعليمات الاستخدام
-bot.onText(/^\$monsterCard(?:\s+(\S+))?$/i, async (msg, match) => {
-  const nodeKey = match[1];
-  if (!nodeKey) {
-    return bot.sendMessage(msg.chat.id, "⚠️ يرجى تحديد مفتاح النود.\nمثال: `$monsterCard battle_1`", { parse_mode: 'Markdown' });
-  }
-  return handleMonsterCard(bot, msg);
-});
+  // ─── Monster Card Wizard ────────────────────────────────────────────────────
+  bot.onText(/^\$monsterCard(?:\s+(\S+))?$/i, async (msg, match) => {
+    const nodeKey = match[1];
+    if (!nodeKey) {
+      return bot.sendMessage(msg.chat.id,
+        "⚠️ يرجى تحديد مفتاح النود أو نوع البوس.\nمثال: `$monsterCard battle_1` أو `$monsterCard nitron`",
+        { parse_mode: 'Markdown' }
+      );
+    }
+    return handleMonsterCard(bot, msg);
+  });
 
-  // Special Roles
   // ─── Special Roles ───────────────────────────────────────────────────────────
+  bot.onText(/^\$setRawi(?:\s+(\S+))?$/i, async (msg, match) => {
+    const playerCode = match[1];
+    if (!playerCode) {
+      return bot.sendMessage(msg.chat.id, "⚠️ يرجى تحديد كود اللاعب لمنحه رتبة الراوي.\nمثال: `$setRawi PLR-12345`", { parse_mode: 'Markdown' });
+    }
+    return handleSetRawi(bot, msg);
+  });
 
-// أمر تعيين الراوي
-bot.onText(/^\$setRawi(?:\s+(\S+))?$/i, async (msg, match) => {
-  const playerCode = match[1];
-  if (!playerCode) {
-    return bot.sendMessage(msg.chat.id, "⚠️ يرجى تحديد كود اللاعب لمنحه رتبة الراوي.\nمثال: `$setRawi PLR-12345`", { parse_mode: 'Markdown' });
-  }
-  return handleSetRawi(bot, msg);
-});
+  bot.onText(/^\$removeRawi(?:\s+(\S+))?$/i, async (msg, match) => {
+    const playerCode = match[1];
+    if (!playerCode) {
+      return bot.sendMessage(msg.chat.id, "⚠️ يرجى تحديد كود اللاعب لسحب رتبة الراوي منه.\nمثال: `$removeRawi PLR-12345`", { parse_mode: 'Markdown' });
+    }
+    return handleRemoveRawi(bot, msg);
+  });
 
-// أمر سحب رتبة الراوي
-bot.onText(/^\$removeRawi(?:\s+(\S+))?$/i, async (msg, match) => {
-  const playerCode = match[1];
-  if (!playerCode) {
-    return bot.sendMessage(msg.chat.id, "⚠️ يرجى تحديد كود اللاعب لسحب رتبة الراوي منه.\nمثال: `$removeRawi PLR-12345`", { parse_mode: 'Markdown' });
-  }
-  return handleRemoveRawi(bot, msg);
-});
-
-  // Player
-  bot.onText(/^\$story$/i,              msg => handleStory(bot, msg));
+  // ─── Player ──────────────────────────────────────────────────────────────────
+  bot.onText(/^\$story$/i, msg => handleStory(bot, msg));
 }
 
 module.exports = {

@@ -7,6 +7,11 @@ const {
   PLAY_TYPE_LABELS
 } = require('../utils/constants');
 
+// 👇 1. زِدنا الدالة هنا الفوق باش تحمي الأسماء من الأخطاء
+function escMd(text) {
+  return String(text || '').replace(/([_*`\[\]()])/g, '\\$1');
+}
+
 const CARD_CONFIG = {
   IDC: {
     sql: `SELECT ic.*, p.character_name, p.player_code
@@ -14,7 +19,8 @@ const CARD_CONFIG = {
             JOIN players p ON p.id = ic.player_id
            WHERE ic.card_id = ?`,
     format: (card) =>
-      `🎭 *بطاقة تعريفية*\n\n🆔 \`${card.card_id}\`\n📝 *${card.name}*\n👤 ${card.character_name} (${card.player_code})\n\n` +
+      // 👇 2. استعملنا escMd فـ الأسماء
+      `🎭 *بطاقة تعريفية*\n\n🆔 \`${card.card_id}\`\n📝 *${escMd(card.name)}*\n👤 ${escMd(card.character_name)} (${escMd(card.player_code)})\n\n` +
       `❤️ HP: ${card.hp} | ⚔️ ATK: ${card.atk} | ✨ Magic: ${card.magic}\n🛡️ DEF: ${card.def} | 💨 SPD: ${card.spd} | 🎯 Acc: ${card.accuracy}\n\n` +
       `💰 متبقي: ${card.remaining_points}/${card.total_points}\n` +
       `🧩 رصيد البطاقات الفرعية: ATK ${card.available_atk ?? card.atk} | Magic ${card.available_magic ?? card.magic} | DEF ${card.available_def ?? card.def} | SPD ${card.available_spd ?? card.spd} | Acc ${card.available_accuracy ?? card.accuracy}`
@@ -30,7 +36,7 @@ const CARD_CONFIG = {
         : card.type === 'magic'
           ? `✨ Magic: ${card.magic} | 🎯 Acc: ${card.accuracy}`
           : `🛡️ DEF: ${card.def} | 💨 SPD: ${card.spd}`;
-      return `⚔️ *بطاقة لعب*\n\n🆔 \`${card.card_id}\`\n📝 *${card.name}* — ${PLAY_TYPE_LABELS[card.type]}\n👤 ${card.character_name}\n\n${stats}`;
+      return `⚔️ *بطاقة لعب*\n\n🆔 \`${card.card_id}\`\n📝 *${escMd(card.name)}* — ${PLAY_TYPE_LABELS[card.type]}\n👤 ${escMd(card.character_name)}\n\n${stats}`;
     }
   },
   SKL: {
@@ -41,12 +47,12 @@ const CARD_CONFIG = {
     format: (card) => {
       const details = card.type === 'poison'
         ? `☠️ نسبة السم: ${card.poison_percent}%`
-        : ['reflect', 'almighty', 'stun'].includes(card.type)
+        :['reflect', 'almighty', 'stun'].includes(card.type)
           ? `💥 نقاط التأثير: ${card.effect_points || 0}`
           : card.effect_points
             ? `💥 نقاط التأثير: ${card.effect_points}`
             : `ℹ️ بدون نقاط إضافية`;
-      return `🌟 *بطاقة مهارة*\n\n🆔 \`${card.card_id}\`\n📝 *${card.name}* — ${SKILL_LABELS[card.type]}\n👤 ${card.character_name}\n\n${details}\n⏳ ${DURATION_LABELS[card.duration]}`;
+      return `🌟 *بطاقة مهارة*\n\n🆔 \`${card.card_id}\`\n📝 *${escMd(card.name)}* — ${SKILL_LABELS[card.type]}\n👤 ${escMd(card.character_name)}\n\n${details}\n⏳ ${DURATION_LABELS[card.duration]}`;
     }
   },
   WPN: {
@@ -62,7 +68,7 @@ const CARD_CONFIG = {
           : card.sub_type === 'magic'
             ? `✨ Magic: ${card.magic} | 🎯 Acc: ${card.accuracy}`
             : `🛡️ DEF: ${card.def} | 💨 SPD: ${card.spd}`;
-      return `🗡️ *بطاقة سلاح*\n\n🆔 \`${card.card_id}\`\n📝 *${card.name}* — ${WEAPON_TYPE_LABELS[card.weapon_type]}\n👤 ${card.character_name}\n\n${stats}`;
+      return `🗡️ *بطاقة سلاح*\n\n🆔 \`${card.card_id}\`\n📝 *${escMd(card.name)}* — ${WEAPON_TYPE_LABELS[card.weapon_type]}\n👤 ${escMd(card.character_name)}\n\n${stats}`;
     }
   }
 };
