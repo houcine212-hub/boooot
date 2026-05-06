@@ -12,7 +12,7 @@ function register(bot) {
     const hasPermission = await permissions.canManageCards(telegramId);
     if (!hasPermission) {
       return bot.sendMessage(chatId,
-        `🚫 *ليس لديك صلاحية الوصول إلى لوحة التحكم.*\n\n` +
+        ` *ليس لديك صلاحية الوصول إلى لوحة التحكم.*\n\n` +
         `هذا الأمر مخصص للأدمن فقط.`,
         { parse_mode: 'Markdown' }
       );
@@ -22,12 +22,12 @@ function register(bot) {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '🎭 بطاقة تعريفية', callback_data: 'panel_identity' },
-            { text: '⚔️ بطاقة لعب', callback_data: 'panel_play' }
+            { text: ' بطاقة تعريفية', callback_data: 'panel_identity' },
+            { text: ' بطاقة لعب', callback_data: 'panel_play' }
           ],
           [
-            { text: '🌟 بطاقة مهارات', callback_data: 'panel_skill' },
-            { text: '🗡️ بطاقة أسلحة', callback_data: 'panel_weapon' }
+            { text: ' بطاقة مهارات', callback_data: 'panel_skill' },
+            { text: ' بطاقة أسلحة', callback_data: 'panel_weapon' }
           ]
         ]
       }
@@ -35,7 +35,7 @@ function register(bot) {
 
     bot.sendMessage(chatId,
       `━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `🎴 *لوحة تحكم البطاقات*\n` +
+      ` *لوحة تحكم البطاقات*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
       `اختر نوع البطاقة التي تريد إنشاءها:`,
       { parse_mode: 'Markdown', ...keyboard }

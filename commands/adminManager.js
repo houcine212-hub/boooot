@@ -4,13 +4,13 @@ const permissions = require('../utils/permissions');
 
 async function grantAdminByPlayerCode(bot, chatId, playerCode, grantedByTelegramId) {
   if (!permissions.isMainAdmin(grantedByTelegramId)) {
-    await bot.sendMessage(chatId, '🚫 هذا الأمر مخصص للأدمن الرئيسي فقط.');
+    await bot.sendMessage(chatId, ' هذا الأمر مخصص للأدمن الرئيسي فقط.');
     return false;
   }
 
   const normalizedCode = String(playerCode || '').trim();
   if (!normalizedCode) {
-    await bot.sendMessage(chatId, '❌ أدخل كود لاعب صالح.');
+    await bot.sendMessage(chatId, ' أدخل كود لاعب صالح.');
     return false;
   }
 
@@ -20,7 +20,7 @@ async function grantAdminByPlayerCode(bot, chatId, playerCode, grantedByTelegram
   );
 
   if (!player) {
-    await bot.sendMessage(chatId, `❌ لم يتم العثور على لاعب بهذا الكود: \`${normalizedCode}\``, { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, ` لم يتم العثور على لاعب بهذا الكود: \`${normalizedCode}\``, { parse_mode: 'Markdown' });
     return false;
   }
 
@@ -30,8 +30,8 @@ async function grantAdminByPlayerCode(bot, chatId, playerCode, grantedByTelegram
   await bot.sendMessage(
     chatId,
     alreadyAdmin
-      ? `ℹ️ اللاعب *${player.character_name}* (\`${player.player_code}\`) أدمن بالفعل، وتم تأكيد صلاحياته.`
-      : `✅ تم منح *${player.character_name}* (\`${player.player_code}\`) صلاحية الأدمن الكاملة.`,
+      ? `ℹ اللاعب *${player.character_name}* (\`${player.player_code}\`) أدمن بالفعل، وتم تأكيد صلاحياته.`
+      : ` تم منح *${player.character_name}* (\`${player.player_code}\`) صلاحية الأدمن الكاملة.`,
     { parse_mode: 'Markdown' }
   );
   return true;
@@ -43,7 +43,7 @@ function register(bot) {
     const telegramId = msg.from.id;
 
     if (!permissions.isMainAdmin(telegramId)) {
-      return bot.sendMessage(chatId, '🚫 هذا الأمر مخصص للأدمن الرئيسي فقط.');
+      return bot.sendMessage(chatId, ' هذا الأمر مخصص للأدمن الرئيسي فقط.');
     }
 
     const playerCode = match[1]?.trim();
@@ -54,7 +54,7 @@ function register(bot) {
     session.setSession(telegramId, 'add_admin', 'awaiting_player_code');
     return bot.sendMessage(
       chatId,
-      '👑 أرسل *كود اللاعب* الذي تريد منحه صلاحية الأدمن.\nمثال: `ABC123` أو أي كود لاعب مسجل عندك.',
+      ' أرسل *كود اللاعب* الذي تريد منحه صلاحية الأدمن.\nمثال: `ABC123` أو أي كود لاعب مسجل عندك.',
       { parse_mode: 'Markdown' }
     );
   });
@@ -69,7 +69,7 @@ async function handleStep(bot, msg) {
 
   if (!permissions.isMainAdmin(telegramId)) {
     session.clearSession(telegramId);
-    await bot.sendMessage(chatId, '🚫 هذا الأمر مخصص للأدمن الرئيسي فقط.');
+    await bot.sendMessage(chatId, ' هذا الأمر مخصص للأدمن الرئيسي فقط.');
     return true;
   }
 

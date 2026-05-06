@@ -8,11 +8,11 @@ const session    = require('../middleware/sessionManager');
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
-const RARITY_EMOJI = { common: '⚪', rare: '🔵', epic: '🟣', legendary: '🔴' };
+const RARITY_EMOJI = { common: '⚪', rare: '🔵', epic: '🟣', legendary: '' };
 const STORE_LABEL  = {
-  city:    '🏙️ متجر المدينة',
-  kingdom: '🏰 متجر المملكة',
-  empire:  '👑 متجر الإمبراطورية',
+  city:    ' متجر المدينة',
+  kingdom: ' متجر المملكة',
+  empire:  ' متجر الإمبراطورية',
 };
 
 const VALID_LEVELS  = ['city', 'kingdom', 'empire'];
@@ -61,20 +61,20 @@ function buildMainMenuText(player) {
     'Accessing Imperial Network... █ 100%',
     '',
     '┏━━━━━━━━━━━━━━━━━━━━┓',
-    '   🛒 قـائـمـة الـمـتـاجـر',
+    '    قـائـمـة الـمـتـاجـر',
     '┗━━━━━━━━━━━━━━━━━━━━┛',
-    `👤 الكيان : ${player.character_name}`,
-    `🟡 الرصيد : ${player.mg_balance} MG`,
+    ` الكيان : ${player.character_name}`,
+    ` الرصيد : ${player.mg_balance} MG`,
   ]);
 }
 
 const MAIN_KEYBOARD = {
   inline_keyboard: [
     [
-      { text: '🏙️ City Store',    callback_data: 'shop_tier_city' },
-      { text: '🏰 Kingdom Store', callback_data: 'shop_tier_kingdom' },
+      { text: ' City Store',    callback_data: 'shop_tier_city' },
+      { text: ' Kingdom Store', callback_data: 'shop_tier_kingdom' },
     ],
-    [{ text: '👑 Empire Store',   callback_data: 'shop_tier_empire' }],
+    [{ text: ' Empire Store',   callback_data: 'shop_tier_empire' }],
   ],
 };
 
@@ -109,7 +109,7 @@ async function showTierItems(bot, query, tier) {
   if (!items.length) {
     return bot.editMessageText(cb(['[ ＳＹＳＴＥＭ ]', 'المتجر فارغ حالياً.']), {
       chat_id: chat.id, message_id, parse_mode: 'MarkdownV2',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'shop_main' }]] },
+      reply_markup: { inline_keyboard: [[{ text: ' رجوع', callback_data: 'shop_main' }]] },
     });
   }
 
@@ -117,8 +117,8 @@ async function showTierItems(bot, query, tier) {
     `[ ＳＹＳＴＥＭ : ${STORE_LABEL[tier]} ]`,
     '─────────────────────────────────',
     ...items.map(i => {
-      const expiry = i.expires_at ? `  ⏳${fmtExpiry(i.expires_at)}` : '';
-      return `${RARITY_EMOJI[i.rarity]} ${i.name.padEnd(18)}  🟡${i.price}${expiry}`;
+      const expiry = i.expires_at ? `  ${fmtExpiry(i.expires_at)}` : '';
+      return `${RARITY_EMOJI[i.rarity]} ${i.name.padEnd(18)}  ${i.price}${expiry}`;
     }),
     '─────────────────────────────────',
   ];
@@ -128,7 +128,7 @@ async function showTierItems(bot, query, tier) {
     reply_markup: {
       inline_keyboard: [
         ...items.map(i => [{ text: `${RARITY_EMOJI[i.rarity]} ${i.name}`, callback_data: `shop_item_${i.id}` }]),
-        [{ text: '🔙 رجوع', callback_data: 'shop_main' }],
+        [{ text: ' رجوع', callback_data: 'shop_main' }],
       ],
     },
   });
@@ -152,18 +152,18 @@ async function showItemDetail(bot, query, itemId) {
   if (!item) return;
 
   const expiryLine = item.expires_at
-    ? `│ ⏳ ينتهي بعد  : ${fmtExpiry(item.expires_at)}`
-    : '│ ⏳ ينتهي      : لا يوجد';
+    ? `│  ينتهي بعد  : ${fmtExpiry(item.expires_at)}`
+    : '│  ينتهي      : لا يوجد';
 
   const lines = [
     '[ ＳＹＳＴＥＭ : Item Details ]',
     '┌──────────────────────────────────',
-    `│ 💠 الإسم    : ${item.name}`,
-    `│ 📊 الندرة   : ${RARITY_EMOJI[item.rarity]} ${item.rarity}`,
-    `│ 🟡 السعر    : ${item.price} MG`,
+    `│  الإسم    : ${item.name}`,
+    `│  الندرة   : ${RARITY_EMOJI[item.rarity]} ${item.rarity}`,
+    `│  السعر    : ${item.price} MG`,
     expiryLine,
     '├──────────────────────────────────',
-    `│ 📜 الوصف    : ${item.description || '—'}`,
+    `│  الوصف    : ${item.description || '—'}`,
     '└──────────────────────────────────',
   ];
 
@@ -171,8 +171,8 @@ async function showItemDetail(bot, query, itemId) {
     chat_id: chat.id, message_id, parse_mode: 'MarkdownV2',
     reply_markup: {
       inline_keyboard: [[
-        { text: '💳 شراء',  callback_data: `shop_buy_${itemId}` },
-        { text: '🔙 رجوع', callback_data: `shop_tier_${item.store_level}` },
+        { text: ' شراء',  callback_data: `shop_buy_${itemId}` },
+        { text: ' رجوع', callback_data: `shop_tier_${item.store_level}` },
       ]],
     },
   });
@@ -184,27 +184,27 @@ async function handleBuy(bot, query, itemId) {
   const { chat, message_id } = query.message;
   const player = await getPlayer(query.from.id);
   if (!player) {
-    return bot.answerCallbackQuery(query.id, { text: '⚠️ غير مسجل', show_alert: true });
+    return bot.answerCallbackQuery(query.id, { text: ' غير مسجل', show_alert: true });
   }
 
   let item;
   try {
     item = await shop.buyItem(player.id, itemId);
   } catch (err) {
-    return bot.answerCallbackQuery(query.id, { text: `❌ ${err.message}`, show_alert: true });
+    return bot.answerCallbackQuery(query.id, { text: `d ${err.message}`, show_alert: true });
   }
 
   await bot.editMessageText(cb([
     '[ ＳＹＳＴＥＭ : SUCCESS ]',
     '──────────────────────────────────',
-    `✅ تم الشراء   : ${item.name}`,
-    `📊 الندرة      : ${RARITY_EMOJI[item.rarity]} ${item.rarity}`,
-    `🟡 المدفوع     : ${item.price} MG`,
+    ` تم الشراء   : ${item.name}`,
+    ` الندرة      : ${RARITY_EMOJI[item.rarity]} ${item.rarity}`,
+    ` المدفوع     : ${item.price} MG`,
     '──────────────────────────────────',
     '  تم تحديث مخزونك.',
   ]), {
     chat_id: chat.id, message_id, parse_mode: 'MarkdownV2',
-    reply_markup: { inline_keyboard: [[{ text: '🔙 العودة للمتجر', callback_data: 'shop_main' }]] },
+    reply_markup: { inline_keyboard: [[{ text: ' العودة للمتجر', callback_data: 'shop_main' }]] },
   });
 
   if (item.item_type === 'card_pack') {
@@ -233,7 +233,7 @@ async function showInventory(bot, chatId, telegramId) {
   if (isEmpty) {
     return bot.sendMessage(chatId, cb([
       '[ ＳＹＳＴＥＭ : Inventory ]',
-      `👤 الكيان : ${player.character_name}`,
+      ` الكيان : ${player.character_name}`,
       '──────────────────────────────────',
       '  حقيبتك فارغة حالياً.',
       '──────────────────────────────────',
@@ -242,16 +242,16 @@ async function showInventory(bot, chatId, telegramId) {
 
   const lines = [
     '[ ＳＹＳＴＥＭ : Inventory ]',
-    `👤 الكيان : ${player.character_name}`,
-    `🟡 الرصيد : ${player.mg_balance} MG`,
+    ` الكيان : ${player.character_name}`,
+    ` الرصيد : ${player.mg_balance} MG`,
     '══════════════════════════════════',
   ];
 
-  lines.push('  [ 🧪 المستهلكات ]');
+  lines.push('  [  المستهلكات ]');
   lines.push('  ──────────────────────────────');
   if (items.length) {
     for (const i of items) {
-      const expTag = i.expires_at ? `  ⏳${fmtExpiry(i.expires_at)}` : '';
+      const expTag = i.expires_at ? `  ${fmtExpiry(i.expires_at)}` : '';
       lines.push(`  ${RARITY_EMOJI[i.rarity]} ${i.name.padEnd(18)}  x${i.quantity}${expTag}`);
     }
   } else {
@@ -260,11 +260,11 @@ async function showInventory(bot, chatId, telegramId) {
 
   lines.push('');
 
-  lines.push('  [ ⚒️ المواد ]');
+  lines.push('  [  المواد ]');
   lines.push('  ──────────────────────────────');
   if (resources.length) {
     for (const r of resources) {
-      lines.push(`  ◆ ${r.resource_type.padEnd(20)}  x${r.quantity}`);
+      lines.push(`   ${r.resource_type.padEnd(20)}  x${r.quantity}`);
     }
   } else {
     lines.push('  لا يوجد.');
@@ -283,7 +283,7 @@ function buildSpinMenuText(player, price, active) {
     return cb([
       '[ ＳＹＳＴＥＭ : LOCKED ]',
       '══════════════════════════════════',
-      '  🔒 بوابة الاستدعاء مغلقة',
+      '   بوابة الاستدعاء مغلقة',
       '  الوصول مرفوض من الإمبراطورية.',
       '══════════════════════════════════',
     ]);
@@ -291,13 +291,13 @@ function buildSpinMenuText(player, price, active) {
   return cb([
     '[ ＳＹＳＴＥＭ : SUMMONING GATE ]',
     '══════════════════════════════════',
-    '  🌀  بوابة الاستدعاء — مفتوحة',
+    '    بوابة الاستدعاء — مفتوحة',
     '══════════════════════════════════',
-    `  👤 الكيان  : ${player ? player.character_name : '???'}`,
-    `  🟡 الرصيد  : ${player ? player.mg_balance : '???'} MG`,
+    `   الكيان  : ${player ? player.character_name : '???'}`,
+    `   الرصيد  : ${player ? player.mg_balance : '???'} MG`,
     '──────────────────────────────────',
-    `  💠 سعر x1  : ${price} MG`,
-    `  💠 سعر x10 : ${price * 10} MG`,
+    `   سعر x1  : ${price} MG`,
+    `   سعر x10 : ${price * 10} MG`,
     '──────────────────────────────────',
     '  "ماذا ستستدعي من الظلام..?"',
   ]);
@@ -305,8 +305,8 @@ function buildSpinMenuText(player, price, active) {
 
 const SPIN_KEYBOARD = {
   inline_keyboard: [[
-    { text: '🌀 Spin x1',  callback_data: 'spin_do_1' },
-    { text: '🌀 Spin x10', callback_data: 'spin_do_10' },
+    { text: ' Spin x1',  callback_data: 'spin_do_1' },
+    { text: ' Spin x10', callback_data: 'spin_do_10' },
   ]],
 };
 
@@ -344,13 +344,13 @@ async function handleSpin(bot, query, count) {
   const { chat, message_id } = query.message;
   const player = await getPlayer(query.from.id);
   if (!player) {
-    return bot.answerCallbackQuery(query.id, { text: '⚠️ غير مسجل', show_alert: true });
+    return bot.answerCallbackQuery(query.id, { text: ' غير مسجل', show_alert: true });
   }
 
   await bot.editMessageText(cb([
     '[ ＳＹＳＴＥＭ : SUMMONING ]',
     '══════════════════════════════════',
-    '  ◆ ◆ ◆ ◆ ◆   جاري الاستدعاء...',
+    '         جاري الاستدعاء...',
     '  تمزيق نسيج الواقع...',
     '  فتح البوابة المظلمة...',
     '══════════════════════════════════',
@@ -365,10 +365,10 @@ async function handleSpin(bot, query, count) {
   } catch (err) {
     await bot.editMessageText(cb([
       '[ ＳＹＳＴＥＭ : ERROR ]',
-      `  ❌ ${err.message}`,
+      `  d ${err.message}`,
     ]), {
       chat_id: chat.id, message_id, parse_mode: 'MarkdownV2',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'spin_menu' }]] },
+      reply_markup: { inline_keyboard: [[{ text: ' رجوع', callback_data: 'spin_menu' }]] },
     });
     return;
   }
@@ -386,7 +386,7 @@ async function handleSpin(bot, query, count) {
       `  ${RARITY_EMOJI[won.rarity]}  ${won.item_name}`,
       `  الندرة : ${won.rarity}`,
       '══════════════════════════════════',
-      `  🟡 المدفوع : ${totalCost} MG`,
+      `   المدفوع : ${totalCost} MG`,
     ];
   } else {
     const grouped = {};
@@ -399,7 +399,7 @@ async function handleSpin(bot, query, count) {
       '══════════════════════════════════',
       ...Object.entries(grouped).map(([k, v]) => `  ${k}${v > 1 ? `  x${v}` : ''}`),
       '══════════════════════════════════',
-      `  🟡 المدفوع : ${totalCost} MG`,
+      `   المدفوع : ${totalCost} MG`,
     ];
   }
 
@@ -407,8 +407,8 @@ async function handleSpin(bot, query, count) {
     chat_id: chat.id, message_id, parse_mode: 'MarkdownV2',
     reply_markup: {
       inline_keyboard: [[
-        { text: count === 1 ? '🌀 Spin Again' : '🌀 Spin x10 Again', callback_data: `spin_do_${count}` },
-        { text: '🔙 رجوع', callback_data: 'spin_menu' },
+        { text: count === 1 ? ' Spin Again' : ' Spin x10 Again', callback_data: `spin_do_${count}` },
+        { text: ' رجوع', callback_data: 'spin_menu' },
       ]],
     },
   });
@@ -462,15 +462,15 @@ function registerAdminCommands(bot) {
 
     return bot.sendMessage(msg.chat.id, cb([
       '[ ＳＹＳＴＥＭ : SUCCESS ]',
-      `✅ تم الإضافة       : ${name}`,
-      `🆔 ID               : ${itemId}`,
-      `🟡 السعر            : ${priceStr} MG`,
-      `📦 النوع            : ${type} / ${storeLevel}`,
-      `📊 الندرة           : ${RARITY_EMOJI[rarity]} ${rarity}`,
-      resolvedTargetType ? `⚡ نوع التأثير     : ${resolvedTargetType}` : '⚡ نوع التأثير     : —',
-      boostValue ? `💪 قيمة التعزيز   : +${boostValue}` : '💪 قيمة التعزيز   : —',
-      isCraftingResource ? '⚒️ مادة تصنيع      : نعم' : '⚒️ مادة تصنيع      : لا',
-      hours > 0 ? `⏳ ينتهي بعد       : ${hours} ساعة` : '⏳ ينتهي           : لا يوجد',
+      ` تم الإضافة       : ${name}`,
+      ` ID               : ${itemId}`,
+      ` السعر            : ${priceStr} MG`,
+      ` النوع            : ${type} / ${storeLevel}`,
+      ` الندرة           : ${RARITY_EMOJI[rarity]} ${rarity}`,
+      resolvedTargetType ? ` نوع التأثير     : ${resolvedTargetType}` : ' نوع التأثير     : —',
+      boostValue ? ` قيمة التعزيز   : +${boostValue}` : ' قيمة التعزيز   : —',
+      isCraftingResource ? ' مادة تصنيع      : نعم' : ' مادة تصنيع      : لا',
+      hours > 0 ? ` ينتهي بعد       : ${hours} ساعة` : ' ينتهي           : لا يوجد',
     ]), { parse_mode: 'MarkdownV2' });
   });
 
@@ -480,8 +480,8 @@ function registerAdminCommands(bot) {
     const deleted = await shop.deleteItem(itemId);
     return bot.sendMessage(msg.chat.id, cb(
       deleted
-        ? ['[ ＳＹＳＴＥＭ : SUCCESS ]', `✅ تم حذف العنصر رقم ${itemId}`]
-        : ['[ ＳＹＳＴＥＭ : ERROR ]',   `❌ العنصر ${itemId} غير موجود`]
+        ? ['[ ＳＹＳＴＥＭ : SUCCESS ]', ` تم حذف العنصر رقم ${itemId}`]
+        : ['[ ＳＹＳＴＥＭ : ERROR ]',   `d العنصر ${itemId} غير موجود`]
     ), { parse_mode: 'MarkdownV2' });
   });
 
@@ -492,8 +492,8 @@ function registerAdminCommands(bot) {
       '[ ＳＹＳＴＥＭ : SPIN STATUS ]',
       '──────────────────────────────────',
       newState
-        ? '✅ بوابة الاستدعاء : مفتوحة  🟢'
-        : '🔒 بوابة الاستدعاء : مغلقة   🔴',
+        ? ' بوابة الاستدعاء : مفتوحة  🟢'
+        : ' بوابة الاستدعاء : مغلقة   ',
     ]), { parse_mode: 'MarkdownV2' });
   });
 
@@ -527,10 +527,10 @@ function registerAdminCommands(bot) {
 
     return bot.sendMessage(msg.chat.id, cb([
       '[ ＳＹＳＴＥＭ : SUCCESS ]',
-      `✅ أضيف للسحب    : ${name}`,
-      `📊 الندرة        : ${RARITY_EMOJI[rarity]} ${rarity}`,
-      `🎲 نسبة الظهور   : ${(dropRate * 100).toFixed(2)}%`,
-      `🟡 سعر السحبة    : ${parseInt(priceStr) || 100} MG`,
+      ` أضيف للسحب    : ${name}`,
+      ` الندرة        : ${RARITY_EMOJI[rarity]} ${rarity}`,
+      ` نسبة الظهور   : ${(dropRate * 100).toFixed(2)}%`,
+      ` سعر السحبة    : ${parseInt(priceStr) || 100} MG`,
     ]), { parse_mode: 'MarkdownV2' });
   });
 }
@@ -580,7 +580,7 @@ async function handleUse(bot, msg, itemName) {
   );
 
   if (!item) {
-    return bot.sendMessage(chatId, cb(['[ ＳＹＳＴＥＭ ]', `❌ لا تملك هذا العنصر في حقيبتك:`, `> ${itemName}`]), { parse_mode: 'MarkdownV2' });
+    return bot.sendMessage(chatId, cb(['[ ＳＹＳＴＥＭ ]', `d لا تملك هذا العنصر في حقيبتك:`, `> ${itemName}`]), { parse_mode: 'MarkdownV2' });
   }
 
   if (['stats', 'poison', 'reflect', 'almighty', 'stun', 'weapon'].includes(item.target_type) && item.target_type !== 'none') {
@@ -590,8 +590,8 @@ async function handleUse(bot, msg, itemName) {
         return bot.sendMessage(chatId, cb([
           '[ ＳＹＳＴＥＭ : SUCCESS ]',
           '──────────────────────────────────',
-          `✅ تم استخدام : ${item.name}`,
-          `📝 النتيجة   : ${result.message}`,
+          ` تم استخدام : ${item.name}`,
+          ` النتيجة   : ${result.message}`,
           '──────────────────────────────────'
         ]), { parse_mode: 'MarkdownV2' });
       } catch (err) {
@@ -602,7 +602,7 @@ async function handleUse(bot, msg, itemName) {
     session.setSession(tid, 'use_enhancer', 'awaiting_card_id', { itemName: item.name });
     return bot.sendMessage(chatId, cb([
       '[ ＳＹＳＴＥＭ ]',
-      `⚡ تفعيل: ${item.name}`,
+      ` تفعيل: ${item.name}`,
       '──────────────────────────────────',
       'يرجى إرسال ID البطاقة التي تريد تطويرها',
       '(أو قم بتصوير الـ QR الخاص بها الآن).',
@@ -614,8 +614,8 @@ async function handleUse(bot, msg, itemName) {
     const result = await shop.useItem(player.id, item.name);
     return bot.sendMessage(chatId, cb([
       '[ ＳＹＳＴＥＭ : SUCCESS ]',
-      `✅ تم استخدام : ${item.name}`,
-      `📝 النتيجة   : ${result.message}`
+      ` تم استخدام : ${item.name}`,
+      ` النتيجة   : ${result.message}`
     ]), { parse_mode: 'MarkdownV2' });
   } catch (err) {
     return bot.sendMessage(chatId, cb(['[ ERROR ]', err.message]), { parse_mode: 'MarkdownV2' });
@@ -631,7 +631,7 @@ async function handleUseStep(bot, msg) {
 
   const cardId = (msg.text || '').trim().toUpperCase();
 
-  // ✅ FIX: fetch player to get internal player.id instead of passing telegram tid
+  //  FIX: fetch player to get internal player.id instead of passing telegram tid
   const player = await getPlayer(tid);
   if (!player) {
     session.clearSession(tid);
@@ -639,7 +639,7 @@ async function handleUseStep(bot, msg) {
   }
 
   try {
-    const result = await shop.useItem(player.id, s.data.itemName, cardId); // ✅ player.id لا tid
+    const result = await shop.useItem(player.id, s.data.itemName, cardId); //  player.id لا tid
     session.clearSession(tid);
 
     return bot.sendMessage(msg.chat.id, cb([
@@ -648,12 +648,12 @@ async function handleUseStep(bot, msg) {
       `   تم دمج: ${s.data.itemName}`,
       `   مع البطاقة: ${cardId}`,
       '┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛',
-      `✨ النتيجة: +${result.boostValue} قوة إضافية!`,
-      `📊 الحالة الحالية: تم التحديث بنجاح.`
+      ` النتيجة: +${result.boostValue} قوة إضافية!`,
+      ` الحالة الحالية: تم التحديث بنجاح.`
     ]), { parse_mode: 'MarkdownV2' });
   } catch (err) {
     session.clearSession(tid);
-    return bot.sendMessage(msg.chat.id, cb(['[ ＳＹＳＴＥＭ : ERROR ]', `❌ ${err.message}`]), { parse_mode: 'MarkdownV2' });
+    return bot.sendMessage(msg.chat.id, cb(['[ ＳＹＳＴＥＭ : ERROR ]', `d ${err.message}`]), { parse_mode: 'MarkdownV2' });
   }
 }
 

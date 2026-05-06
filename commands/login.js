@@ -357,11 +357,11 @@ async function handleCharCallback(bot, query) {
       }
       if (!playerCode) throw new Error('CODEGEN_FAILED');
 
-      // 4. Insert new player
+      // 4. Insert new player — system_rank = 'none' so rankSystem.js handles dynamic rank
       const [ins] = await conn.execute(
         `INSERT INTO players
            (telegram_id, real_name, character_name, player_code, system_rank)
-         VALUES (?, ?, ?, ?, 'citizen')`,
+         VALUES (?, ?, ?, ?, 'none')`,
         [tid, realName, char.char_name, playerCode]
       );
       const newPlayerId = ins.insertId;
@@ -489,7 +489,7 @@ async function handleCharCallback(bot, query) {
         `مرحباً بك في نظام RAAZN، ${realName}.\n\n` +
         `🎭  شخصيتك   :  ${result.char.char_name}\n` +
         `🪪   كودك      :  ${result.playerCode}\n` +
-        `⭐  رتبتك      :  Citizen\n\n` +
+        `⭐  الرتبة      :  لاجئ\n\n` +
         `─────────────────────────────\n\n` +
         `انضم إلى المجموعة الرسمية واكتب:\n` +
         `  $start_exam\n\n` +
@@ -540,4 +540,4 @@ async function handleCharCallback(bot, query) {
 
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
-module.exports = { register, handleLoginStep, handleCharCallback };
+module.exports = { register, handleLoginStep, handleCharCallback }

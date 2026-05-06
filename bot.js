@@ -31,6 +31,8 @@ const storyManager    = require('./commands/storyManager');
 const cardCharacter   = require('./commands/cardCharacter');
 const setTutorialBoss = require('./commands/admin/setTutorialBoss');
 const startExamCmd    = require('./commands/startExam');
+const battalionCmds = require('./commands/battalionCmds');
+const auraCmd = require('./commands/aura');
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 const identityCard    = require('./handlers/identityCard');
@@ -55,7 +57,7 @@ if (!TOKEN) {
 const bot = new TelegramBot(TOKEN, {
   polling: {
     params: {
-      allowed_updates: ['message', 'callback_query']
+      allowed_updates: ['message', 'callback_query', 'chat_member']
     }
   }
 });
@@ -117,6 +119,8 @@ storyManager.register(bot);
 cardCharacter.register(bot);
 setTutorialBoss.register(bot);
 startExamCmd.register(bot);
+battalionCmds.register(bot);
+auraCmd.register(bot);
 
 // ─── Callback queries ─────────────────────────────────────────────────────────
 bot.on('callback_query', async (query) => {
@@ -142,6 +146,7 @@ bot.on('callback_query', async (query) => {
   if (data.startsWith('cc_plctype_'))         return await cardCharacter.handlePlcTypeCallback(bot, query);
   if (data.startsWith('cc_skltype_'))         return await cardCharacter.handleSklTypeCallback(bot, query);
   if (data.startsWith('cc_skldur_'))          return await cardCharacter.handleSklDurCallback(bot, query);
+  if (data.startsWith('aura_'))               return auraCmd.handleCallback(bot, query);
 
   if (data === 'panel_identity')              return identityCard.startIdentityCardCreation(bot, chatId, tid);
   if (data === 'panel_play')                  return playCard.startPlayCardCreation(bot, chatId, tid);
@@ -168,19 +173,48 @@ bot.on('callback_query', async (query) => {
   if (data.startsWith('panelbot_weapondur_')) return botWeaponCard.handleBotWeaponDurationSelection(bot, chatId, tid, data.replace('panelbot_weapondur_', ''));
 });
 
+// ─── Chat member handler (supergroup join via link) ───────────────────────────
+// Telegram no longer reliably fires new_chat_members service messages in
+// supergroups when someone joins via an invite link. The chat_member update
+// is the modern, authoritative way to catch joins.
+bot.on('chat_member', async (update) => {
+  try {
+    const oldStatus = update.old_chat_member?.status;
+    const newStatus = update.new_chat_member?.status;
+
+    // Only care about transitions INTO the group (member / administrator)
+    const wasOutside = ['left', 'kicked', 'restricted', 'banned'].includes(oldStatus) || oldStatus === undefined;
+    const isNowInside = newStatus === 'member' || newStatus === 'administrator';
+
+    if (!wasOutside || !isNowInside) return;
+
+    // Build a synthetic object that handleJoin understands
+    const syntheticMsg = {
+      chat           : { id: update.chat.id },
+      new_chat_members: [update.new_chat_member.user],
+    };
+
+    await startExamCmd.handleJoin(bot, syntheticMsg);
+  } catch (err) {
+    console.error('[chat_member] handleJoin error:', err);
+  }
+});
+
 // ─── Main message handler ──────────────────────────────────────────────────────
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const tid    = msg.from?.id;
 
-  // ── 1. Member join events — must be caught BEFORE any text guard ─────────────
-  // Service messages have no text, so they would be silently dropped otherwise.
+  // ── 1. Member join events ─────────────────────────────────────────────────────
   if (msg.new_chat_members) {
     try { await startExamCmd.handleJoin(bot, msg); } catch (err) {
       console.error('[handleJoin] error:', err);
     }
     return;
   }
+   // ── 1.5 AURA MODE (Conqueror's Haki Guard) ──────────────────────────────────
+  const auraHandled = await auraCmd.handleAuraMessage(bot, msg);
+  if (auraHandled) return; // توقيف كل شيء: إما تم حذف رسالة العامي، أو تم تحويل رسالة الإمبراطور
 
   let text = (msg.text || msg.caption || '').trim();
 
@@ -276,6 +310,7 @@ bot.on('message', async (msg) => {
       if (action === 'setimg')                                 return await setImgCmd.handleStep(bot, msg);
       if (action === 'use_enhancer')                           return await shopCommands.handleUseStep(bot, msg);
       if (action === 'char_card_wizard')                       return await cardCharacter.handleCharCardStep(bot, msg);
+      if (data.startsWith('aura_'))                            return auraCmd.handleCallback(bot, query);
       return;
     } catch (err) {
       console.error(`Error in session (${action}):`, err.message);

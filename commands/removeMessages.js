@@ -7,7 +7,7 @@ function register(bot) {
 
     // تحقق من الأدمن
     if (!(await permissions.isAdmin(telegramId))) {
-      return bot.sendMessage(chatId, '❌ هذا الأمر مخصص للأدمن فقط.');
+      return bot.sendMessage(chatId, ' هذا الأمر مخصص للأدمن فقط.');
     }
 
     // عدد الرسائل (default 50)
@@ -26,7 +26,7 @@ function register(bot) {
       }
     }
 
-    bot.sendMessage(chatId, `🧹 تم حذف ${deleted} رسالة.`);
+    bot.sendMessage(chatId, ` تم حذف ${deleted} رسالة.`);
   });
 }
 

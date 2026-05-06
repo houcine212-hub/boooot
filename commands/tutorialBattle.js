@@ -58,8 +58,8 @@ function getTutFight(chatId) { return tutFights.get(String(chatId)) || null; }
 // HP status line shown after each round
 function hpLine(fight) {
   return (
-    `❤️ ${escapeMarkdown(fight.player.name)}: *${fight.player.currentHp}*  ` +
-    `|  ❤️ Nitron: *${fight.bot.currentHp}*`
+    ` ${escapeMarkdown(fight.player.name)}: *${fight.player.currentHp}*  ` +
+    `|   Nitron: *${fight.bot.currentHp}*`
   );
 }
 
@@ -206,7 +206,7 @@ async function _checkWin(bot, chatId, fight) {
     await bot.sendMessage(
       chatId,
       `\`\`\`\n◈ ═══════════════════════ ◈\n\n` +
-      `⚔️  النصر...\n\n` +
+      `  النصر...\n\n` +
       `لقد أثبتت جدارتك وهزمت Nitron.\n` +
       `رتبتك الأولى في الأفق.\n\n` +
       `انتظر الاختبار التالي من النظام.\n\n` +
@@ -255,7 +255,7 @@ async function _botAttackTurn(bot, chatId, fight) {
 
   const card = _chooseBotAttack(fight);
   if (!card) {
-    await bot.sendMessage(chatId, `🤖 Nitron لا يملك بطاقات متبقية!`);
+    await bot.sendMessage(chatId, ` Nitron لا يملك بطاقات متبقية!`);
     await _announcePlayerTurn(bot, chatId, fight);
     return true;
   }
@@ -266,8 +266,8 @@ async function _botAttackTurn(bot, chatId, fight) {
 
   await sendCardVisual(
     bot, chatId, card,
-    `🌑 *Nitron* يلعب: *${escapeMarkdown(card.name)}* (\`${card.card_id}\`)\n` +
-    `🛡️ *رد!* أرسل بطاقة للرد (PLC / WPN / SKL):`
+    ` *Nitron* يلعب: *${escapeMarkdown(card.name)}* (\`${card.card_id}\`)\n` +
+    ` *رد!* أرسل بطاقة للرد (PLC / WPN / SKL):`
   );
   return true;
 }
@@ -289,7 +289,7 @@ async function _announcePlayerTurn(bot, chatId, fight) {
   }
 
   fight.status = 'player_turn';
-  await bot.sendMessage(chatId, `⚔️ *دورك!* أرسل إحدى بطاقاتك (PLC / WPN / SKL):`, { parse_mode: 'Markdown' });
+  await bot.sendMessage(chatId, ` *دورك!* أرسل إحدى بطاقاتك (PLC / WPN / SKL):`, { parse_mode: 'Markdown' });
   return true;
 }
 
@@ -309,8 +309,8 @@ async function _nextTurn(bot, chatId, fight) {
 
 async function _sendResolution(bot, chatId, fight, resolution) {
   await _sendLines(bot, chatId, [
-    `📊 *النتيجة:*`,
-    ...(resolution.summaryLines.length > 0 ? resolution.summaryLines : ['ℹ️ لم يحدث أي تأثير مباشر.']),
+    ` *النتيجة:*`,
+    ...(resolution.summaryLines.length > 0 ? resolution.summaryLines : [' لم يحدث أي تأثير مباشر.']),
     '',
     hpLine(fight)
   ]);
@@ -321,11 +321,11 @@ async function _sendResolution(bot, chatId, fight, resolution) {
 async function _handlePlayerAttack(bot, chatId, fight, cardId) {
   const card = await _getPlayerCard(fight.playerTelegramId, cardId);
   if (!card) {
-    await bot.sendMessage(chatId, '❌ البطاقة غير موجودة أو ليست لك.');
+    await bot.sendMessage(chatId, ' البطاقة غير موجودة أو ليست لك.');
     return true;
   }
   if (fight.player.usedCards.has(cardId)) {
-    await bot.sendMessage(chatId, '❌ هذه البطاقة استُخدمت مسبقاً.');
+    await bot.sendMessage(chatId, ' هذه البطاقة استُخدمت مسبقاً.');
     return true;
   }
 
@@ -333,17 +333,17 @@ async function _handlePlayerAttack(bot, chatId, fight, cardId) {
   fight.status = 'processing';
 
   await _sendLines(bot, chatId, [
-    `👤 *${escapeMarkdown(fight.player.name)}* لعب: *${escapeMarkdown(card.name)}*`
+    ` *${escapeMarkdown(fight.player.name)}* لعب: *${escapeMarkdown(card.name)}*`
   ]);
 
   const botResp = _chooseBotResponse(fight, card);
   if (botResp) {
     fight.bot.usedCards.add(botResp.card_id);
     await sendCardVisual(bot, chatId, botResp,
-      `🌑 Nitron يرد بـ: *${escapeMarkdown(botResp.name)}* (\`${botResp.card_id}\`)`
+      ` Nitron يرد بـ: *${escapeMarkdown(botResp.name)}* (\`${botResp.card_id}\`)`
     );
   } else {
-    await _sendLines(bot, chatId, [`🌑 Nitron لم يجد رداً مناسباً.`]);
+    await _sendLines(bot, chatId, [` Nitron لم يجد رداً مناسباً.`]);
   }
 
   const resolution = combatEngine.resolveTurn(
@@ -366,11 +366,11 @@ async function _handlePlayerResponse(bot, chatId, fight, cardId) {
 
   const card = await _getPlayerCard(fight.playerTelegramId, cardId);
   if (!card) {
-    await bot.sendMessage(chatId, '❌ البطاقة غير موجودة أو ليست لك.');
+    await bot.sendMessage(chatId, ' البطاقة غير موجودة أو ليست لك.');
     return true;
   }
   if (fight.player.usedCards.has(cardId)) {
-    await bot.sendMessage(chatId, '❌ هذه البطاقة استُخدمت مسبقاً.');
+    await bot.sendMessage(chatId, ' هذه البطاقة استُخدمت مسبقاً.');
     return true;
   }
 
@@ -380,7 +380,7 @@ async function _handlePlayerResponse(bot, chatId, fight, cardId) {
   const playerIsAttacking = combatEngine.getCardKind(card) === 'attack';
 
   await _sendLines(bot, chatId, [
-    `👤 *${escapeMarkdown(fight.player.name)}* يرد بـ: *${escapeMarkdown(card.name)}*`
+    ` *${escapeMarkdown(fight.player.name)}* يرد بـ: *${escapeMarkdown(card.name)}*`
   ]);
 
   const botAttackCard  = fight.lastBotCard;
@@ -396,17 +396,17 @@ async function _handlePlayerResponse(bot, chatId, fight, cardId) {
   if (playerIsAttacking) {
     await sleep(600);
     await _sendLines(bot, chatId, [
-      `⚡ *${escapeMarkdown(fight.player.name)}* هاجم في نفس الوقت — Nitron يرد!`
+      ` *${escapeMarkdown(fight.player.name)}* هاجم في نفس الوقت — Nitron يرد!`
     ]);
 
     const botCounter = _chooseBotResponse(fight, card);
     if (botCounter) {
       fight.bot.usedCards.add(botCounter.card_id);
       await sendCardVisual(bot, chatId, botCounter,
-        `🌑 Nitron يرد بـ: *${escapeMarkdown(botCounter.name)}* (\`${botCounter.card_id}\`)`
+        ` Nitron يرد بـ: *${escapeMarkdown(botCounter.name)}* (\`${botCounter.card_id}\`)`
       );
     } else {
-      await _sendLines(bot, chatId, [`🌑 Nitron لم يجد رداً — الهجوم يصل مباشرة!`]);
+      await _sendLines(bot, chatId, [` Nitron لم يجد رداً — الهجوم يصل مباشرة!`]);
     }
 
     const counterRes = combatEngine.resolveTurn(
@@ -446,14 +446,14 @@ async function _handleIdentityCard(bot, chatId, fight, telegramId, cardId) {
     [cardId, telegramId]
   );
   if (!row) {
-    await bot.sendMessage(chatId, '❌ هذه البطاقة ليست لك أو غير موجودة.');
+    await bot.sendMessage(chatId, ' هذه البطاقة ليست لك أو غير موجودة.');
     return true;
   }
 
   // Load player's full card set
   const pCards = await _loadPlayerCards(fight.playerId);
   if (!pCards) {
-    await bot.sendMessage(chatId, '❌ تعذّر تحميل بطاقاتك. تواصل مع الإدارة.');
+    await bot.sendMessage(chatId, ' تعذّر تحميل بطاقاتك. تواصل مع الإدارة.');
     return true;
   }
 
@@ -473,10 +473,10 @@ async function _handleIdentityCard(bot, chatId, fight, telegramId, cardId) {
   // ── Show player card ──────────────────────────────────────────────────────
   await bot.sendMessage(
     chatId,
-    `✅ بطاقتك مقبولة!\n\n` +
-    `━━━━━━━━ 👤 ${escapeMarkdown(fight.player.name)} ━━━━━━━━\n` +
-    `❤️ HP: ${pi.hp}  ⚔️ ATK: ${pi.atk}  ✨ Magic: ${pi.magic || 0}\n` +
-    `🛡️ DEF: ${pi.def}  💨 SPD: ${pi.spd}  🎯 Accuracy: ${pi.accuracy}`,
+    ` بطاقتك مقبولة!\n\n` +
+    `━━━━━━━━  ${escapeMarkdown(fight.player.name)} ━━━━━━━━\n` +
+    ` HP: ${pi.hp}   ATK: ${pi.atk}   Magic: ${pi.magic || 0}\n` +
+    ` DEF: ${pi.def}   SPD: ${pi.spd}   Accuracy: ${pi.accuracy}`,
     { parse_mode: 'Markdown' }
   );
 
@@ -485,10 +485,10 @@ async function _handleIdentityCard(bot, chatId, fight, telegramId, cardId) {
   // ── Reveal bot IDC AFTER player (tutorial guarantee) ─────────────────────
   await sendCardVisual(
     bot, chatId, bi,
-    `🌑 *Nitron* يكشف بطاقته!\n\n` +
-    `━━━━━━━━ 🌑 Nitron ━━━━━━━━\n` +
-    `❤️ HP: ${bi.hp}  ⚔️ ATK: ${bi.atk}  ✨ Magic: ${bi.magic || 0}\n` +
-    `🛡️ DEF: ${bi.def}  💨 SPD: ${bi.spd}  🎯 Accuracy: ${bi.accuracy}\n` +
+    ` *Nitron* يكشف بطاقته!\n\n` +
+    `━━━━━━━━  Nitron ━━━━━━━━\n` +
+    ` HP: ${bi.hp}   ATK: ${bi.atk}   Magic: ${bi.magic || 0}\n` +
+    ` DEF: ${bi.def}   SPD: ${bi.spd}   Accuracy: ${bi.accuracy}\n` +
     `━━━━━━━━━━━━━━━━━━━━━━`
   );
 
@@ -500,7 +500,7 @@ async function _handleIdentityCard(bot, chatId, fight, telegramId, cardId) {
   fight.status = 'player_turn';
   await bot.sendMessage(
     chatId,
-    `⚔️ *أنت تبدأ!* أرسل إحدى بطاقاتك (PLC / WPN / SKL):`,
+    ` *أنت تبدأ!* أرسل إحدى بطاقاتك (PLC / WPN / SKL):`,
     { parse_mode: 'Markdown' }
   );
   return true;
@@ -515,7 +515,7 @@ async function startNitronFight(bot, chatId, telegramId) {
 
   // Refuse to start if a standard or tutorial fight is already running
   if (botFight.hasFight(chatId) || tutFights.has(cid)) {
-    return bot.sendMessage(chatId, '⚠️ هناك نزال جارٍ حالياً في هذه المجموعة. انتظر حتى ينتهي.');
+    return bot.sendMessage(chatId, ' هناك نزال جارٍ حالياً في هذه المجموعة. انتظر حتى ينتهي.');
   }
 
   // Load player record
@@ -526,15 +526,15 @@ async function startNitronFight(bot, chatId, telegramId) {
      WHERE p.telegram_id = ?`,
     [telegramId]
   );
-  if (!player)         return bot.sendMessage(chatId, '❌ لم يُعثر على ملفك. تأكد من التسجيل ($login).');
-  if (!player.ic_db_id) return bot.sendMessage(chatId, '❌ يجب أن تمتلك بطاقة تعريفية (IDC) للدخول في النزال.');
+  if (!player)         return bot.sendMessage(chatId, ' لم يُعثر على ملفك. تأكد من التسجيل ($login).');
+  if (!player.ic_db_id) return bot.sendMessage(chatId, ' يجب أن تمتلك بطاقة تعريفية (IDC) للدخول في النزال.');
 
   // Load Nitron boss cards
   const botCards = await loadTutorialBossCards('nitron');
   if (!botCards) {
     return bot.sendMessage(
       chatId,
-      sys('❌ بطاقات Nitron غير مُعدَّة بعد.\nتواصل مع الإدارة.')
+      sys(' بطاقات Nitron غير مُعدَّة بعد.\nتواصل مع الإدارة.')
     );
   }
 
@@ -595,7 +595,7 @@ async function handleTutorialFightMessage(bot, msg, cardId) {
   if (fight.status === 'wait_player_identity') {
     if (!cardId || !cardId.startsWith('IDC-')) {
       await bot.sendMessage(chatId,
-        '📤 أرسل *بطاقتك التعريفية* (IDC-XXXXX) للبدء.',
+        ' أرسل *بطاقتك التعريفية* (IDC-XXXXX) للبدء.',
         { parse_mode: 'Markdown' }
       );
       return true;
@@ -606,7 +606,7 @@ async function handleTutorialFightMessage(bot, msg, cardId) {
   // ── Player's attack turn ───────────────────────────────────────────────────
   if (fight.status === 'player_turn') {
     if (!cardId) {
-      await bot.sendMessage(chatId, '❌ أرسل رقم بطاقة صالح (PLC / WPN / SKL).');
+      await bot.sendMessage(chatId, ' أرسل رقم بطاقة صالح (PLC / WPN / SKL).');
       return true;
     }
     return _handlePlayerAttack(bot, chatId, fight, cardId);
@@ -615,7 +615,7 @@ async function handleTutorialFightMessage(bot, msg, cardId) {
   // ── Player responds to Nitron's attack ────────────────────────────────────
   if (fight.status === 'player_response') {
     if (!cardId) {
-      await bot.sendMessage(chatId, '❌ أرسل بطاقة للرد (PLC / WPN / SKL).');
+      await bot.sendMessage(chatId, ' أرسل بطاقة للرد (PLC / WPN / SKL).');
       return true;
     }
     return _handlePlayerResponse(bot, chatId, fight, cardId);
@@ -638,7 +638,7 @@ function register(bot) {
       return bot.sendMessage(
         chatId,
         sys(
-          `⚠️ هذا الأمر يعمل فقط في المجموعة الرسمية.\n\n` +
+          ` هذا الأمر يعمل فقط في المجموعة الرسمية.\n\n` +
           `توجّه إلى المجموعة الرسمية وأعد كتابة $start_exam هناك.`
         ),
         { parse_mode: 'Markdown' }
@@ -658,7 +658,7 @@ function register(bot) {
     if (!player) {
       return bot.sendMessage(
         chatId,
-        sys(`❌ أنت غير مسجّل في النظام.\nافتح محادثة خاصة مع البوت واكتب $login أولاً.`),
+        sys(` أنت غير مسجّل في النظام.\nافتح محادثة خاصة مع البوت واكتب $login أولاً.`),
         { parse_mode: 'Markdown' }
       );
     }
@@ -669,7 +669,7 @@ function register(bot) {
       if (player.stage === 'nitron_defeated') {
         return bot.sendMessage(
           chatId,
-          sys(`✅ لقد اجتزت اختبار Nitron بالفعل.\nانتظر الاختبار التالي من النظام.`),
+          sys(` لقد اجتزت اختبار Nitron بالفعل.\nانتظر الاختبار التالي من النظام.`),
           { parse_mode: 'Markdown' }
         );
       }
@@ -677,7 +677,7 @@ function register(bot) {
       return bot.sendMessage(
         chatId,
         sys(
-          `⚠️ لم تكتمل المرحلة الثانية بعد.\n\n` +
+          ` لم تكتمل المرحلة الثانية بعد.\n\n` +
           `افتح محادثة خاصة مع البوت واكتب $login لإكمال التسجيل أولاً.`
         ),
         { parse_mode: 'Markdown' }
@@ -688,32 +688,32 @@ function register(bot) {
     if (botFight.hasFight(chatId) || hasTutFight(chatId)) {
       return bot.sendMessage(
         chatId,
-        '⚠️ هناك نزال جارٍ حالياً في هذه المجموعة. انتظر حتى ينتهي.'
+        ' هناك نزال جارٍ حالياً في هذه المجموعة. انتظر حتى ينتهي.'
       );
     }
 
     // ── 4. Cinematic narrative sequence ────────────────────────────────────
     const loadMsg = await bot.sendMessage(
       chatId,
-      sys(`🔍 جاري فحص العزيمة...\n\n[ ░░░░░░░░░░ ]  0%`),
+      sys(` جاري فحص العزيمة...\n\n[ ░░░░░░░░░░ ]  0%`),
       { parse_mode: 'Markdown' }
     );
 
     await sleep(1100);
     await bot.editMessageText(
-      sys(`🔍 جاري فحص العزيمة...\n\n[ █████████░ ]  90%`),
+      sys(` جاري فحص العزيمة...\n\n[ █████████░ ]  90%`),
       { chat_id: chatId, message_id: loadMsg.message_id, parse_mode: 'Markdown' }
     );
 
     await sleep(900);
     await bot.editMessageText(
-      sys(`🔍 جاري فحص العزيمة...\n\n[ █████████▉ ]  95%`),
+      sys(` جاري فحص العزيمة...\n\n[ █████████▉ ]  95%`),
       { chat_id: chatId, message_id: loadMsg.message_id, parse_mode: 'Markdown' }
     );
 
     await sleep(900);
     await bot.editMessageText(
-      sys(`✅ [ ██████████ ]  100%\n\nFحص مكتمل.`),
+      sys(` [ ██████████ ]  100%\n\فحص مكتمل.`),
       { chat_id: chatId, message_id: loadMsg.message_id, parse_mode: 'Markdown' }
     );
 
@@ -748,7 +748,7 @@ function register(bot) {
     // The bot will NOT send its IDC — it waits for the player's card first.
     await bot.sendMessage(
       chatId,
-      `📤 *أرسل بطاقتك التعريفية (IDC\\-XXXXX) لبدء النزال\\!*`,
+      ` *أرسل بطاقتك التعريفية (IDC\\-XXXXX) لبدء النزال\\!*`,
       { parse_mode: 'MarkdownV2' }
     );
   });

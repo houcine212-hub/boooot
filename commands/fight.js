@@ -49,14 +49,14 @@ function register(bot) {
   bot.onText(/^\$fight$/, async (msg) => {
     const chatId = msg.chat.id;
 
-    const menuMessage = await bot.sendMessage(chatId, `⚔️ *اختر نوع النزال:*`, {
+    const menuMessage = await bot.sendMessage(chatId, ` *اختر نوع النزال:*`, {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🤖 نزالات مع KimiBot',  callback_data: 'fight_bot'      }],
-          [{ text: '🤝 نزالات ودية',         callback_data: 'fight_friendly' }],
-          [{ text: '💰 نزالات النهب',         callback_data: 'fight_loot'     }],
-          [{ text: '📖 طور القصة',            callback_data: 'fight_story'    }],
+          [{ text: ' نزالات مع KimiBot',  callback_data: 'fight_bot'      }],
+          [{ text: ' نزالات ودية',         callback_data: 'fight_friendly' }],
+          [{ text: ' نزالات النهب',         callback_data: 'fight_loot'     }],
+          [{ text: ' طور القصة',            callback_data: 'fight_story'    }],
         ],
       },
     });
@@ -76,11 +76,11 @@ async function handleFightCallback(bot, query) {
   const context    = getMenuContext(chatId, message.message_id);
 
   if (!context) {
-    return bot.sendMessage(chatId, '❌ هاد menu ديال $fight سالات. عاود كتب $fight من جديد.');
+    return bot.sendMessage(chatId, ' هاد menu ديال $fight سالات. عاود كتب $fight من جديد.');
   }
 
   if (context.challengerId !== telegramId) {
-    return bot.sendMessage(chatId, '❌ غير اللي كتب $fight هو اللي يقدر يختار mode.');
+    return bot.sendMessage(chatId, ' غير اللي كتب $fight هو اللي يقدر يختار mode.');
   }
 
   if (data === 'fight_bot') {
@@ -100,7 +100,7 @@ async function handleFightCallback(bot, query) {
     popMenuContext(chatId, message.message_id);
 
     if (botFight.hasFight(chatId)) {
-      return bot.sendMessage(chatId, '❌ كاين نزال آخر خدام دابا فهاد الشات. تسنّى حتى يسالي.');
+      return bot.sendMessage(chatId, ' كاين نزال آخر خدام دابا فهاد الشات. تسنّى حتى يسالي.');
     }
 
     return pvpFight.startFriendlyChallenge(bot, {
@@ -115,7 +115,7 @@ async function handleFightCallback(bot, query) {
     popMenuContext(chatId, message.message_id);
 
     if (lootPvp.hasFight(chatId)) {
-      return bot.sendMessage(chatId, '❌ كاين نزال نهب آخر خدام دابا فهاد الشات. تسنّى حتى يسالي.');
+      return bot.sendMessage(chatId, ' كاين نزال نهب آخر خدام دابا فهاد الشات. تسنّى حتى يسالي.');
     }
 
     return lootPvp.startLootChallenge(bot, {
@@ -128,7 +128,7 @@ async function handleFightCallback(bot, query) {
   // --- طور القصة (Story Mode) ---
   if (data === 'fight_story') {
     popMenuContext(chatId, message.message_id);
-    return bot.sendMessage(chatId, '🚧 هاد الوضع مازال قيد التطوير.');
+    return bot.sendMessage(chatId, ' هاد الوضع مازال قيد التطوير.');
   }
 
   return false;

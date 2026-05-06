@@ -23,41 +23,29 @@ const STAGE = {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ─── System message formatter ─────────────────────────────────────────────────
-// Wraps text in a Solo Leveling dark-style code block. No icons or emojis.
 function sys(body) {
   return `\`\`\`\n[ SYSTEM ]\n\n${body}\n\`\`\``;
 }
 
 // ─── Combat Engine ─────────────────────────────────────────────────────────────
 
-/**
- * Resolves a single card played against a target IDC.
- *
- * Returns:
- *   { isDefense, newShield }   — DEF card: builds a shield, deals no damage
- *   { missed }                 — accuracy roll failed
- *   { damage, absorbed }       — hit landed; absorbed = shield that was consumed
- */
 function resolveAttack(plc, targetIDC, currentShield = 0) {
   if (plc.type === 'defense') {
     return { isDefense: true, newShield: plc.def, damage: 0, missed: false, absorbed: 0 };
   }
 
-  // Accuracy check — speed stat of the target reduces hit probability slightly
   const evasionPenalty = Math.floor(targetIDC.spd * 0.05);
   const hitChance      = Math.min(95, Math.max(25, Math.floor(plc.accuracy / 10) - evasionPenalty));
   if (Math.floor(Math.random() * 100) >= hitChance) {
     return { isDefense: false, newShield: 0, damage: 0, missed: true, absorbed: 0 };
   }
 
-  // Raw damage — defense stat of the target reduces the blow
   let raw = 0;
   if (plc.type === 'attack') {
     raw = Math.max(100, plc.atk   - Math.floor(targetIDC.def * 0.25));
   } else if (plc.type === 'magic') {
     raw = Math.max(100, plc.magic - Math.floor(targetIDC.def * 0.10));
   }
-  // SKL cards or unknown types contribute 0 raw — harmless pass
 
   const absorbed = Math.min(currentShield, raw);
   const damage   = raw - absorbed;
@@ -67,10 +55,6 @@ function resolveAttack(plc, targetIDC, currentShield = 0) {
 
 // ─── DB Helpers ───────────────────────────────────────────────────────────────
 
-/**
- * Loads the boss IDC, PLCs, and SKLs from tutorial_boss_cards.
- * PLCs and SKLs are merged into a single attack rotation array.
- */
 async function loadBoss(bossType) {
   const rows = await db.query(
     'SELECT * FROM tutorial_boss_cards WHERE boss_type = ? LIMIT 1',
@@ -78,36 +62,32 @@ async function loadBoss(bossType) {
   );
   if (!rows.length) throw Object.assign(new Error('BOSS_NOT_SET'), { bossType });
 
-  const boss   = rows[0];
-  const plcIds = JSON.parse(boss.plc_ids || '[]');
-  const sklIds = JSON.parse(boss.skl_ids || '[]');
+  const boss = rows[0];
+
+  if (boss.idc_card_id == null) throw new Error('BOSS_IDC_MISSING');
+
+  // plc_ids is a JSON array: ["PLC-XXXXX", ...]
+  let plcIds;
+  try { plcIds = JSON.parse(boss.plc_ids || '[]'); } catch { plcIds = []; }
+  if (!plcIds.length) throw new Error('BOSS_CARDS_MISSING');
 
   // Identity Card
-  const [idc] = await db.query(
+  const idcRows = await db.query(
     'SELECT * FROM identity_cards WHERE card_id = ? LIMIT 1',
     [boss.idc_card_id]
   );
-  if (!idc) throw new Error('BOSS_IDC_MISSING');
+  if (!idcRows.length) throw new Error('BOSS_IDC_MISSING');
+  const idc = idcRows[0];
 
-  // Play Cards
-  let plcs = [];
-  if (plcIds.length) {
-    const ph = plcIds.map(() => '?').join(',');
-    plcs = await db.query(`SELECT * FROM play_cards WHERE card_id IN (${ph})`, plcIds);
-  }
+  // Play Cards (multiple — fetched by IN clause)
+  const placeholders = plcIds.map(() => '?').join(',');
+  const plcRows = await db.query(
+    `SELECT * FROM play_cards WHERE card_id IN (${placeholders})`,
+    plcIds
+  );
+  if (!plcRows.length) throw new Error('BOSS_CARDS_MISSING');
 
-  // Skill Cards (loaded and appended to the rotation so the boss uses them too)
-  let skls = [];
-  if (sklIds.length) {
-    const ph = sklIds.map(() => '?').join(',');
-    skls = await db.query(`SELECT * FROM skill_cards WHERE card_id IN (${ph})`, sklIds);
-  }
-
-  // Combined card pool — PLCs first, SKLs cycle in after
-  const allCards = [...plcs, ...skls];
-  if (!allCards.length) throw new Error('BOSS_CARDS_MISSING');
-
-  return { idc, plcs: allCards };
+  return { idc, plcs: plcRows };
 }
 
 async function loadPlayerCards(playerId) {
@@ -141,10 +121,6 @@ async function setTutorialStage(playerId, stage) {
 
 // ─── Boss Card Visual ─────────────────────────────────────────────────────────
 
-/**
- * Sends the boss Identity Card as a visual (photo if image_id exists, text otherwise).
- * Builds a clean stats block beneath it — no emojis.
- */
 async function sendBossCard(bot, chatId, bossIdc, bossName) {
   const statsCaption =
     `[ ${bossName} — Identity Card ]\n\n` +
@@ -156,21 +132,12 @@ async function sendBossCard(bot, chatId, bossIdc, bossName) {
     `SPD     : ${bossIdc.spd}\n` +
     (bossIdc.magic !== undefined ? `MAGIC   : ${bossIdc.magic}\n` : '');
 
-  // sendCardVisual handles photo vs. text automatically based on image_id
   await sendCardVisual(bot, chatId, bossIdc, statsCaption);
 }
 
 // ─── Fight Bootstrapper ───────────────────────────────────────────────────────
 
-/**
- * Initialises a boss fight:
- *   1. Loads boss data from tutorial_boss_cards.
- *   2. Sends the boss Identity Card visually.
- *   3. Posts the phase rules.
- *   4. Sets up session and waits for the player to submit their IDC.
- */
 async function startFight(bot, chatId, tid, playerId, bossType) {
-  // ── Load boss ──────────────────────────────────────────────────────────────
   let boss;
   try {
     boss = await loadBoss(bossType);
@@ -178,33 +145,32 @@ async function startFight(bot, chatId, tid, playerId, bossType) {
     if (err.message === 'BOSS_NOT_SET') {
       return bot.sendMessage(
         chatId,
-        sys(`Boss configuration for (${bossType}) has not been set.\nContact administration.`),
+        sys(`إعدادات الخصم (${bossType}) لم يتم تعيينها.\nتواصل مع الادارة.`),
         { parse_mode: 'Markdown' }
       );
     }
     if (err.message === 'BOSS_IDC_MISSING') {
       return bot.sendMessage(
         chatId,
-        sys(`Identity Card for boss (${bossType}) is missing or deleted.\nContact administration.`),
+        sys(`بطاقة الهوية للخصم (${bossType}) غير موجودة او محذوفة.\nتواصل مع الادارة.`),
         { parse_mode: 'Markdown' }
       );
     }
     if (err.message === 'BOSS_CARDS_MISSING') {
       return bot.sendMessage(
         chatId,
-        sys(`Attack cards for boss (${bossType}) have not been configured.\nContact administration.`),
+        sys(`بطاقات الهجوم للخصم (${bossType}) لم يتم تهيئتها.\nتواصل مع الادارة.`),
         { parse_mode: 'Markdown' }
       );
     }
     throw err;
   }
 
-  // ── Load player ────────────────────────────────────────────────────────────
   const { idc: playerIDC, plcs: playerPLCs } = await loadPlayerCards(playerId);
   if (!playerIDC) {
     return bot.sendMessage(
       chatId,
-      sys('No Identity Card is linked to your account.\nContact administration.'),
+      sys('لا توجد بطاقة هوية مرتبطة بحسابك.\nتواصل مع الادارة.'),
       { parse_mode: 'Markdown' }
     );
   }
@@ -212,24 +178,21 @@ async function startFight(bot, chatId, tid, playerId, bossType) {
   const bossName = bossType === BOSS_NITRON ? 'Nitron' : 'Monster X';
   const phase    = bossType === BOSS_NITRON ? '1' : '2';
 
-  // ── Send boss IDC — photo first, then stats ────────────────────────────────
   await sendBossCard(bot, chatId, boss.idc, bossName);
   await sleep(800);
 
-  // ── Phase rules ────────────────────────────────────────────────────────────
   await bot.sendMessage(
     chatId,
     sys(
-      `Phase ${phase}: ${bossName}. Send your IDC to begin.\n\n` +
-      `Your card : ${playerIDC.card_id}\n` +
-      `Your HP   : ${playerIDC.hp}\n\n` +
-      `The opponent will respond only after you play.\n` +
-      `You have the first move.`
+      `المرحلة ${phase}: ${bossName}. أرسل بطاقة هويتك للبدء.\n\n` +
+      `بطاقتك   : ${playerIDC.card_id}\n` +
+      `نقاط حياتك : ${playerIDC.hp}\n\n` +
+      `الخصم لن يرد إلا بعد أن تلعب.\n` +
+      `لك حق البدء.`
     ),
     { parse_mode: 'Markdown' }
   );
 
-  // ── Initialise session ─────────────────────────────────────────────────────
   session.setSession(tid, 'start_exam', 'awaiting_idc', {
     bossType,
     bossName,
@@ -247,7 +210,7 @@ async function startFight(bot, chatId, tid, playerId, bossType) {
   });
 }
 
-// ─── Step Handler (called from bot.js message listener) ───────────────────────
+// ─── Step Handler ─────────────────────────────────────────────────────────────
 
 async function handleStep(bot, msg, cardId) {
   const chatId = msg.chat.id;
@@ -261,7 +224,7 @@ async function handleStep(bot, msg, cardId) {
     if (!cardId || !cardId.toUpperCase().startsWith('IDC-')) {
       return bot.sendMessage(
         chatId,
-        sys(`Send your Identity Card (IDC) to begin the fight.\nYour card: \`${sess.data.playerIDC.card_id}\``),
+        sys(`أرسل بطاقة هويتك (IDC) لبدء المعركة.\nبطاقتك: \`${sess.data.playerIDC.card_id}\``),
         { parse_mode: 'Markdown' }
       );
     }
@@ -269,25 +232,24 @@ async function handleStep(bot, msg, cardId) {
     if (cardId.toUpperCase() !== sess.data.playerIDC.card_id.toUpperCase()) {
       return bot.sendMessage(
         chatId,
-        sys(`That is not your card.\nYour card is: \`${sess.data.playerIDC.card_id}\``),
+        sys(`هذه ليست بطاقتك.\nبطاقتك هي: \`${sess.data.playerIDC.card_id}\``),
         { parse_mode: 'Markdown' }
       );
     }
 
-    // IDC accepted — advance to combat phase
     const d = sess.data;
     session.setSession(tid, 'start_exam', 'in_combat', d);
 
     return bot.sendMessage(
       chatId,
       sys(
-        `Identity Card accepted. Combat initiated.\n\n` +
-        `[ ${d.playerIDC.name} ]   HP: ${d.playerHP}\n` +
-        `       VS\n` +
-        `[ ${d.bossIDC.name} ]   HP: ${d.bossHP}\n\n` +
+        `تم قبول بطاقة الهوية. بدأت المعركة.\n\n` +
+        `[ ${d.playerIDC.name} ]   ح: ${d.playerHP}\n` +
+        `       ضد\n` +
+        `[ ${d.bossIDC.name} ]   ح: ${d.bossHP}\n\n` +
         `─────────────────────────\n\n` +
-        `Round 1 — Your turn.\n\n` +
-        `Send a Play Card (PLC) to attack.`
+        `الجولة 1 — دورك.\n\n` +
+        `أرسل بطاقة لعب (PLC) للهجوم.`
       ),
       { parse_mode: 'Markdown' }
     );
@@ -298,21 +260,20 @@ async function handleStep(bot, msg, cardId) {
     if (!cardId || !cardId.toUpperCase().startsWith('PLC-')) {
       return bot.sendMessage(
         chatId,
-        sys('Send a Play Card (PLC) to attack.'),
+        sys('أرسل بطاقة لعب (PLC) للهجوم.'),
         { parse_mode: 'Markdown' }
       );
     }
 
     const d = { ...sess.data };
 
-    // Verify the card belongs to this player
     const plc = d.playerPLCs.find(
       (p) => p.card_id.toUpperCase() === cardId.toUpperCase()
     );
     if (!plc) {
       return bot.sendMessage(
         chatId,
-        sys('That card does not belong to you or is not in your hand.'),
+        sys('هذه البطاقة لا تخصك او ليست في يدك.'),
         { parse_mode: 'Markdown' }
       );
     }
@@ -323,14 +284,14 @@ async function handleStep(bot, msg, cardId) {
 
     if (pRes.isDefense) {
       d.playerShield += pRes.newShield;
-      pLine = `Defense card played (${plc.name}) — Shield +${pRes.newShield} points.`;
+      pLine = `تم لعب بطاقة دفاع (${plc.name}) — درع +${pRes.newShield} نقطة.`;
     } else if (pRes.missed) {
-      pLine = `Your attack (${plc.name}) missed the target.`;
+      pLine = `هجومك (${plc.name}) فاته الهدف.`;
     } else {
       d.bossShield = Math.max(0, d.bossShield - pRes.absorbed);
       d.bossHP    -= pRes.damage;
-      pLine        = `You struck ${d.bossName} for ${pRes.damage} damage (${plc.name})`;
-      if (pRes.absorbed) pLine += ` — ${pRes.absorbed} absorbed by shield`;
+      pLine        = `ضربت ${d.bossName} بـ ${pRes.damage} ضرر (${plc.name})`;
+      if (pRes.absorbed) pLine += ` — ${pRes.absorbed} امتصه الدرع`;
       pLine += '.';
     }
 
@@ -340,7 +301,7 @@ async function handleStep(bot, msg, cardId) {
       session.clearSession(tid);
       await bot.sendMessage(
         chatId,
-        sys(`${pLine}\n\n${d.bossName} HP: 0\n\n...`),
+        sys(`${pLine}\n\n${d.bossName} نقاط الحياة: 0\n\n...`),
         { parse_mode: 'Markdown' }
       );
       await sleep(1200);
@@ -355,14 +316,14 @@ async function handleStep(bot, msg, cardId) {
 
     if (bRes.isDefense) {
       d.bossShield += bRes.newShield;
-      bLine         = `${d.bossName} played a defense card (${bossCard.name}) — Shield +${bRes.newShield}.`;
+      bLine         = `${d.bossName} لعب بطاقة دفاع (${bossCard.name}) — درع +${bRes.newShield}.`;
     } else if (bRes.missed) {
-      bLine = `${d.bossName} attack (${bossCard.name}) missed.`;
+      bLine = `هجوم ${d.bossName} (${bossCard.name}) فاته الهدف.`;
     } else {
       d.playerShield = Math.max(0, d.playerShield - bRes.absorbed);
       d.playerHP    -= bRes.damage;
-      bLine          = `${d.bossName} struck you for ${bRes.damage} damage (${bossCard.name})`;
-      if (bRes.absorbed) bLine += ` — ${bRes.absorbed} absorbed by your shield`;
+      bLine          = `${d.bossName} ضربك بـ ${bRes.damage} ضرر (${bossCard.name})`;
+      if (bRes.absorbed) bLine += ` — ${bRes.absorbed} امتصه درعك`;
       bLine += '.';
     }
 
@@ -374,8 +335,8 @@ async function handleStep(bot, msg, cardId) {
         chatId,
         sys(
           `${pLine}\n${bLine}\n\n` +
-          `You        :  0 HP\n` +
-          `${d.bossName}  :  ${d.bossHP} HP`
+          `انت        :  0 نقطة حياة\n` +
+          `${d.bossName}  :  ${d.bossHP} ح`
         ),
         { parse_mode: 'Markdown' }
       );
@@ -383,20 +344,20 @@ async function handleStep(bot, msg, cardId) {
       return handleLoss(bot, chatId, tid, d);
     }
 
-    // ── Advance round — update session and prompt next card ────────────────
+    // ── Advance round ──────────────────────────────────────────────────────
     d.round += 1;
     session.setSession(tid, 'start_exam', 'in_combat', d);
 
     return bot.sendMessage(
       chatId,
       sys(
-        `Round ${d.round - 1}\n\n` +
+        `الجولة ${d.round - 1}\n\n` +
         `${pLine}\n` +
         `${bLine}\n\n` +
         `─────────────────────────\n` +
-        `You        :  ${d.playerHP} HP${d.playerShield ? `   Shield: ${d.playerShield}` : ''}\n` +
-        `${d.bossName}  :  ${d.bossHP} HP${d.bossShield ? `   Shield: ${d.bossShield}` : ''}\n\n` +
-        `Round ${d.round} — Send your next card.`
+        `انت        :  ${d.playerHP} ح${d.playerShield ? `   درع: ${d.playerShield}` : ''}\n` +
+        `${d.bossName}  :  ${d.bossHP} ح${d.bossShield ? `   درع: ${d.bossShield}` : ''}\n\n` +
+        `الجولة ${d.round} — أرسل بطاقتك التالية.`
       ),
       { parse_mode: 'Markdown' }
     );
@@ -411,11 +372,10 @@ async function handleWin(bot, chatId, tid, d) {
   if (d.bossType === BOSS_NITRON) {
     await bot.sendMessage(
       chatId,
-      sys('Nitron defeated. Initializing second test...'),
+      sys('تم هزيمة نيترون. جاري تحضير الاختبار الثاني...'),
       { parse_mode: 'Markdown' }
     );
 
-    // Transfer Skill cards (SKL) from BOT_SYSTEM to the player
     await db.query(
       `UPDATE skill_cards sc
        INNER JOIN character_starter_templates cst
@@ -427,7 +387,6 @@ async function handleWin(bot, chatId, tid, d) {
       [d.playerId, BOT_SYSTEM_PLAYER_ID]
     );
 
-    // Transfer Weapon cards (WPN) from BOT_SYSTEM to the player
     await db.query(
       `UPDATE weapon_cards wc
        INNER JOIN character_starter_templates cst
@@ -445,9 +404,9 @@ async function handleWin(bot, chatId, tid, d) {
     await bot.sendMessage(
       chatId,
       sys(
-        'Your remaining cards have been transferred.\n\n' +
-        'The trial is not over.\n\n' +
-        'A second adversary emerges from the dark.'
+        'تم نقل بطاقاتك المتبقية.\n\n' +
+        'الاختبار لم ينته بعد.\n\n' +
+        'خصم ثانٍ يظهر من الظلام.'
       ),
       { parse_mode: 'Markdown' }
     );
@@ -459,16 +418,16 @@ async function handleWin(bot, chatId, tid, d) {
       console.error('[handleWin] Monster X startFight error:', err);
       return bot.sendMessage(
         chatId,
-        sys('An error occurred while initializing the second fight.\nContact administration.'),
+        sys('حدث خطأ اثناء تحضير المعركة الثانية.\nتواصل مع الادارة.'),
         { parse_mode: 'Markdown' }
       );
     }
   }
 
-  // ── Monster X cleared → grant Refugee rank ─────────────────────────────────
+  // ── Monster X cleared → keep system_rank = 'none' so rankSystem.js calculates dynamically ──
   await db.query(
     `UPDATE players
-     SET system_rank = 'refugee', is_tutorial_complete = 1
+     SET system_rank = 'none', is_tutorial_complete = 1
      WHERE id = ?`,
     [d.playerId]
   );
@@ -485,21 +444,57 @@ async function handleWin(bot, chatId, tid, d) {
   return bot.sendMessage(
     chatId,
     sys(
-      'You have proven your worth.\n\n' +
-      '"Welcome, warrior, to the Raazn system.\n' +
-      'YATG."\n\n' +
+      'مبروك لقد اجتزت الاختبار\n' +
+      'لقد تبيّن أن المؤسس لديه نظرة صعبة ... "YAMP"\n\n' +
       `─────────────────────────\n\n` +
-      `Name        :  ${realName}\n` +
-      `Character   :  ${charName}\n` +
-      `New Rank    :  Refugee\n\n` +
-      'You are free now.\n' +
-      'The world is open before you.'
+      `الاسم       :  ${realName}\n` +
+      `الشخصية    :  ${charName}\n` +
+      `الرتبة الجديدة :  لاجئ\n\n` +
+      'انت حر الآن.\n' +
+      'العالم مفتوح امامك.'
     ),
     { parse_mode: 'Markdown' }
   );
 }
 
 // ─── Loss Handler ─────────────────────────────────────────────────────────────
+
+const TAUNTS_HEAVY = [
+  'الخصم لم يتعرق.',
+  'هذا ما كنا نخشى تأكيده.',
+  'النظام يسجل هذه المعركة تحت خانة: لم تحدث.',
+  'حتى نيترون بدا مُحرَجًا.',
+  'لو كان هذا امتحانًا مدرسيًا، لما وُجدت درجة تُكتب لك.',
+  'الساحة لم تُصمَّم لهذا المستوى.',
+  'كنا نتوقع ضعفًا، لكن ليس بهذا الشكل.',
+];
+
+const TAUNTS_MID = [
+  'كنا نتوقع أكثر. كثيرًا أكثر.',
+  'المعركة لم تكن متكافئة — وليس لصالحك.',
+  'هناك فجوة بين ما تظنه عن نفسك وما أثبتته الساحة.',
+  'بذلت جهدًا. لكنه لم يكن كافيًا.',
+  'الخصم أكمل يومه بلا إجهاد يُذكر.',
+];
+
+const TAUNTS_CLOSE = [
+  'كدت تنجح. لكن "كاد" لا تُسجَّل في نظام RAAZN.',
+  'كان الفارق صغيرًا. لكنه كان كافيًا.',
+  'لحظة أخرى ربما. لكن تلك اللحظة لم تأتِ.',
+];
+
+function pickTaunt(d) {
+  const maxHP  = d.bossIDC.hp;
+  const leftHP = Math.max(0, d.bossHP);
+  const ratio  = maxHP > 0 ? leftHP / maxHP : 0;
+
+  let pool;
+  if (ratio >= 0.55)      pool = TAUNTS_HEAVY;
+  else if (ratio >= 0.25) pool = TAUNTS_MID;
+  else                    pool = TAUNTS_CLOSE;
+
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 async function handleLoss(bot, chatId, tid, d) {
   const failStage = d.bossType === BOSS_NITRON
@@ -508,24 +503,23 @@ async function handleLoss(bot, chatId, tid, d) {
 
   await setTutorialStage(d.playerId, failStage);
 
+  const taunt = pickTaunt(d);
+
   return bot.sendMessage(
     chatId,
     sys(
-      'You fell in battle.\n\n' +
-      '"Our confidence in you was misplaced.\n\n' +
-      'The system grants you one more chance.\n\n' +
-      'Type $continue to retake the test,\n' +
-      'if you still have the will."'
+      'لقد سقطت في المعركة.\n\n' +
+      `${taunt}\n\n` +
+      'النظام يمنحك فرصة اخيرة.\n\n' +
+      'اكتب $continue لإعادة الاختبار،\n' +
+      'إن كانت لديك الإرادة.'
     ),
     { parse_mode: 'Markdown' }
   );
 }
 
-// ─── Register Commands ─────────────────────────────────────────────────────────
+// ─── Join Handler ─────────────────────────────────────────────────────────────
 
-// ─── Join Handler (called directly from bot.js on new_chat_members) ──────────
-// Extracted from register() so bot.js can call it explicitly at the top of its
-// message handler — before any early-return guards on missing text.
 async function handleJoin(bot, msg) {
   const chatId = msg.chat.id;
   if (chatId !== OFFICIAL_GROUP_ID) return;
@@ -543,20 +537,18 @@ async function handleJoin(bot, msg) {
     if (!players.length) continue;
     const player = players[0];
 
-    // Already a refugee — welcome back, no exam
     if (player.is_tutorial_complete == 1) {
       await bot.sendMessage(
         chatId,
         sys(
-          `The gates recognise you, ${player.character_name}.\n` +
-          `You earned your place here. Welcome back.`
+          `البوابات تعرفك، ${player.character_name}.\n` +
+          `لقد نلت مكانك هنا بجدارة. أهلا بعودتك.`
         ),
         { parse_mode: 'Markdown' }
       );
       continue;
     }
 
-    // Active session already running — do not double-trigger
     if (session.hasActiveSession(tid)) continue;
 
     const stage = await getTutorialStage(player.id);
@@ -565,9 +557,9 @@ async function handleJoin(bot, msg) {
       await bot.sendMessage(
         chatId,
         sys(
-          `You have returned, ${player.character_name}.\n\n` +
-          `Your trial is not finished.\n` +
-          `Type $continue to resume.`
+          `لقد عدت، ${player.character_name}.\n\n` +
+          `محاولتك لم تنته بعد.\n` +
+          `اكتب $continue للمتابعة من حيث توقفت.`
         ),
         { parse_mode: 'Markdown' }
       );
@@ -578,21 +570,20 @@ async function handleJoin(bot, msg) {
       await bot.sendMessage(
         chatId,
         sys(
-          `You have returned, ${player.character_name}.\n\n` +
-          `You failed before. The arena remembers.\n` +
-          `Type $continue to face Nitron again.`
+          `لقد عدت، ${player.character_name}.\n\n` +
+          `لقد سقطت من قبل. الساحة لا تنسى.\n` +
+          `اكتب $continue لمواجهة نيترون مرة اخرى.`
         ),
         { parse_mode: 'Markdown' }
       );
       continue;
     }
 
-    // Fresh entrant — welcome and auto-start
     await bot.sendMessage(
       chatId,
       sys(
-        `Welcome to the Proving Grounds, ${player.character_name}.\n` +
-        `Your worth will be tested here.`
+        `مرحبا بك في ساحة الاختبار، ${player.character_name}.\n` +
+        `ستُقاس جدارتك هنا.`
       ),
       { parse_mode: 'Markdown' }
     );
@@ -604,12 +595,14 @@ async function handleJoin(bot, msg) {
       console.error('[handleJoin] startFight error:', err);
       await bot.sendMessage(
         chatId,
-        sys('An error occurred while initializing your trial.\nContact administration.'),
+        sys('حدث خطأ اثناء تحضير الاختبار.\nتواصل مع الادارة.'),
         { parse_mode: 'Markdown' }
       );
     }
   }
 }
+
+// ─── Register Commands ─────────────────────────────────────────────────────────
 
 function register(bot) {
 
@@ -618,32 +611,29 @@ function register(bot) {
     const chatId = msg.chat.id;
     const tid    = msg.from.id;
 
-    // Official group only
     if (chatId !== OFFICIAL_GROUP_ID) {
       try { await bot.deleteMessage(chatId, msg.message_id); } catch {}
       if (msg.chat.type === 'private') {
         return bot.sendMessage(
           chatId,
-          sys('The Proving Grounds exist in the official group only.\nGo there to begin.'),
+          sys('ساحة الاختبار موجودة في المجموعة الرسمية فقط.\nاذهب إليها للبدء.'),
           { parse_mode: 'Markdown' }
         );
       }
       return;
     }
 
-    // Prevent re-entry during an active session
     if (session.hasActiveSession(tid)) {
       const activeSess = session.getSession(tid);
       if (activeSess?.action === 'start_exam') {
         return bot.sendMessage(
           chatId,
-          sys('You are already in the middle of a test.\nFinish your current fight first.'),
+          sys('انت بالفعل في منتصف اختبار.\nاكمل معركتك الحالية اولاً.'),
           { parse_mode: 'Markdown' }
         );
       }
     }
 
-    // Must be registered
     const players = await db.query(
       'SELECT * FROM players WHERE telegram_id = ? LIMIT 1',
       [tid]
@@ -651,7 +641,7 @@ function register(bot) {
     if (!players.length) {
       return bot.sendMessage(
         chatId,
-        sys('You are not registered.\nUse $login in DM first.'),
+        sys('انت غير مسجل.\nاستخدم $login في الرسائل الخاصة اولاً.'),
         { parse_mode: 'Markdown' }
       );
     }
@@ -660,31 +650,35 @@ function register(bot) {
     if (player.is_tutorial_complete == 1) {
       return bot.sendMessage(
         chatId,
-        sys(`You have already completed the exam, ${player.character_name}.\nYou are a Refugee.`),
+        sys(`لقد اجتزت الاختبار بالفعل، ${player.character_name}.\nرتبتك لاجئ.`),
         { parse_mode: 'Markdown' }
       );
     }
 
-    // Must have reached character selection before attempting the exam
     const stage = await getTutorialStage(player.id);
 
-    if (!stage || stage === STAGE.CHAR_SELECTED || stage === STAGE.FAILED_NITRON) {
+    // ✅ FIX #2: Corrected stage guard logic.
+    //
+    // OLD (broken): outer if swallowed null/CHAR_SELECTED/FAILED_NITRON together,
+    // then inner if could NEVER be true → dead code, null stage wrongly allowed through.
+    //
+    // NEW: explicit checks — null stage is blocked, valid stages proceed cleanly.
 
-      if (stage !== STAGE.CHAR_SELECTED && stage !== STAGE.FAILED_NITRON && stage !== null) {
-        // Guard: only character_selected may start fresh
-        return bot.sendMessage(
-          chatId,
-          sys('Complete character selection before starting the exam.'),
-          { parse_mode: 'Markdown' }
-        );
-      }
+    // No tutorial state yet — player hasn't finished character selection
+    if (!stage) {
+      return bot.sendMessage(
+        chatId,
+        sys('اكمل اختيار شخصيتك قبل بدء الاختبار.'),
+        { parse_mode: 'Markdown' }
+      );
+    }
 
-      // ── Welcoming message ────────────────────────────────────────────────
+    if (stage === STAGE.CHAR_SELECTED || stage === STAGE.FAILED_NITRON) {
       await bot.sendMessage(
         chatId,
         sys(
-          'Welcome to the Proving Grounds.\n' +
-          'Your worth will be tested here.'
+          'مرحبا بك في ساحة الاختبار.\n' +
+          'ستُقاس جدارتك هنا.'
         ),
         { parse_mode: 'Markdown' }
       );
@@ -696,7 +690,7 @@ function register(bot) {
         console.error('[start_exam] startFight error:', err);
         return bot.sendMessage(
           chatId,
-          sys('An error occurred while initializing the fight.\nContact administration.'),
+          sys('حدث خطأ اثناء تحضير المعركة.\nتواصل مع الادارة.'),
           { parse_mode: 'Markdown' }
         );
       }
@@ -705,7 +699,7 @@ function register(bot) {
     if (stage === STAGE.NITRON_CLEARED) {
       await bot.sendMessage(
         chatId,
-        sys('Nitron was already defeated.\nThe second test has not yet been completed.'),
+        sys('نيترون تم هزيمته بالفعل.\nالاختبار الثاني لم يكتمل بعد.'),
         { parse_mode: 'Markdown' }
       );
       await sleep(1000);
@@ -715,7 +709,7 @@ function register(bot) {
         console.error('[start_exam] startFight error:', err);
         return bot.sendMessage(
           chatId,
-          sys('An error occurred while initializing the fight.\nContact administration.'),
+          sys('حدث خطأ اثناء تحضير المعركة.\nتواصل مع الادارة.'),
           { parse_mode: 'Markdown' }
         );
       }
@@ -725,8 +719,8 @@ function register(bot) {
       return bot.sendMessage(
         chatId,
         sys(
-          'You previously failed against Monster X.\n\n' +
-          'Type $continue to retry.'
+          'لقد فشلت سابقاً امام Monster X.\n\n' +
+          'اكتب $continue لإعادة المحاولة.'
         ),
         { parse_mode: 'Markdown' }
       );
@@ -735,7 +729,7 @@ function register(bot) {
     // Fallback — unexpected state
     return bot.sendMessage(
       chatId,
-      sys('Unexpected state detected.\nContact administration.'),
+      sys('حالة غير متوقعة.\nتواصل مع الادارة.'),
       { parse_mode: 'Markdown' }
     );
   });
@@ -760,7 +754,7 @@ function register(bot) {
     if (player.is_tutorial_complete == 1) {
       return bot.sendMessage(
         chatId,
-        sys(`You have already completed the exam, ${player.character_name}.`),
+        sys(`لقد اجتزت الاختبار بالفعل، ${player.character_name}.`),
         { parse_mode: 'Markdown' }
       );
     }
@@ -775,7 +769,7 @@ function register(bot) {
     if (!bossType) {
       return bot.sendMessage(
         chatId,
-        sys('There is no fight to retry.\nUse $start_exam.'),
+        sys('لا توجد معركة لإعادتها.\nاستخدم $start_exam.'),
         { parse_mode: 'Markdown' }
       );
     }
@@ -784,8 +778,8 @@ function register(bot) {
     await bot.sendMessage(
       chatId,
       sys(
-        `Retrying fight against ${bossName}.\n\n` +
-        'You will not fail again.'
+        `إعادة المعركة ضد ${bossName}.\n\n` +
+        'لن تفشل هذه المرة.'
       ),
       { parse_mode: 'Markdown' }
     );
@@ -797,7 +791,7 @@ function register(bot) {
       console.error('[continue] startFight error:', err);
       return bot.sendMessage(
         chatId,
-        sys('An error occurred while initializing the fight.\nContact administration.'),
+        sys('حدث خطأ اثناء تحضير المعركة.\nتواصل مع الادارة.'),
         { parse_mode: 'Markdown' }
       );
     }

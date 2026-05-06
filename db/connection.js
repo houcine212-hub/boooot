@@ -39,9 +39,17 @@ async function ensureTableExists(connection, tableName, createSQL) {
 
   if (rows.length > 0) return false;
 
-  await connection.query(createSQL);
-  console.log(`Created table ${tableName}`);
-  return true;
+  try {
+    await connection.query(createSQL);
+    console.log(`Created table ${tableName}`);
+    return true;
+  } catch (err) {
+    if (err.message && err.message.includes('already exists')) {
+      console.log(`Table ${tableName} already exists (skipping).`);
+      return false;
+    }
+    throw err;
+  }
 }
 
 async function backfillIdentityAvailableStats(connection) {
@@ -211,6 +219,25 @@ async function initDatabase() {
         FOREIGN KEY (\`item_id\`)   REFERENCES \`shop_items\`(\`id\`) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
     );
+
+    // --- rank activity ledger ---
+    await ensureTableExists(
+      tempConnection,
+      'rank_activity_ledger',
+      `CREATE TABLE \`rank_activity_ledger\` (
+        \`player_id\`              INT PRIMARY KEY,
+        \`player_name\`            VARCHAR(100) NOT NULL,
+        \`player_rank\`            VARCHAR(50)  NOT NULL,
+        \`total_mg_given\`         INT NOT NULL DEFAULT 0,
+        \`total_ranks_assigned\`   INT NOT NULL DEFAULT 0,
+        \`total_titles_assigned\`  INT NOT NULL DEFAULT 0,
+        \`total_camps_registered\` INT NOT NULL DEFAULT 0,
+        \`total_duty_activations\` INT NOT NULL DEFAULT 0,
+        \`last_action_at\`         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (\`player_id\`) REFERENCES \`players\`(\`id\`) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    );
+
     console.log('Database and tables initialized successfully.');
   } catch (err) {
     console.error('Error initializing database:', err.message);

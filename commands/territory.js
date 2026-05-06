@@ -29,24 +29,24 @@ function register(bot) {
     const telegramId = msg.from.id;
 
     if (!permissions.isMainAdmin(telegramId)) {
-      return bot.sendMessage(chatId, '🚫 هذا الأمر مخصص للمشرف الرئيسي فقط.');
+      return bot.sendMessage(chatId, ' هذا الأمر مخصص للمشرف الرئيسي فقط.');
     }
 
     const name = match[1].trim();
     if (!name) {
-      return bot.sendMessage(chatId, '⚠️ استخدام: `$addkingdom [اسم المملكة]`', { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, ' استخدام: `$addkingdom [اسم المملكة]`', { parse_mode: 'Markdown' });
     }
 
     const existing = await db.queryOne('SELECT id FROM kingdoms WHERE name = ?', [name]);
     if (existing) {
-      return bot.sendMessage(chatId, `⚠️ مملكة باسم *${name}* موجودة بالفعل بـ ID: \`${existing.id}\``, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, ` مملكة باسم *${name}* موجودة بالفعل بـ ID: \`${existing.id}\``, { parse_mode: 'Markdown' });
     }
 
     const result = await db.query('INSERT INTO kingdoms (name) VALUES (?)', [name]);
 
     await bot.sendMessage(
       chatId,
-      `✅ تم إنشاء المملكة بنجاح\\!\n*الاسم:* ${name}\n*ID:* \`${result.insertId}\`\n\nاستعمل هاد ID باش تضيف مدن بـ \`$addcitytokingdom\``,
+      `تم إنشاء المملكة بنجاح\\!\n*الاسم:* ${name}\n*ID:* \`${result.insertId}\`\n\nاستعمل هاد ID باش تضيف مدن بـ \`$addcitytokingdom\``,
       { parse_mode: 'Markdown' }
     );
   });
@@ -57,7 +57,7 @@ function register(bot) {
     const telegramId = msg.from.id;
 
     if (!permissions.isMainAdmin(telegramId)) {
-      return bot.sendMessage(chatId, '🚫 هذا الأمر مخصص للمشرف الرئيسي فقط.');
+      return bot.sendMessage(chatId, ' هذا الأمر مخصص للمشرف الرئيسي فقط.');
     }
 
     const groupChatId = parseInt(match[1], 10);
@@ -68,7 +68,7 @@ function register(bot) {
     // تحقق من وجود المملكة
     const kingdom = await db.queryOne('SELECT id, name FROM kingdoms WHERE id = ?', [kingdomId]);
     if (!kingdom) {
-      return bot.sendMessage(chatId, `❌ لم يُعثر على مملكة بـ ID: \`${kingdomId}\`\nاستعمل \`$kingdoms\` باش تشوف القائمة.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, ` لم يُعثر على مملكة بـ ID: \`${kingdomId}\`\nاستعمل \`$kingdoms\` باش تشوف القائمة.`, { parse_mode: 'Markdown' });
     }
 
     // تحقق إذا المجموعة مسجلة بالفعل
@@ -76,7 +76,7 @@ function register(bot) {
     if (existing) {
       return bot.sendMessage(
         chatId,
-        `⚠️ هاد الـ chat_id (\`${groupChatId}\`) مسجل بالفعل كمدينة *${existing.name}*.`,
+        ` هاد الـ chat_id (\`${groupChatId}\`) مسجل بالفعل كمدينة *${existing.name}*.`,
         { parse_mode: 'Markdown' }
       );
     }
@@ -86,10 +86,10 @@ function register(bot) {
       [groupChatId, name, kingdomId, isCapital]
     );
 
-    const typeLabel = isCapital ? '👑 القصر الإمبراطوري' : '🏙️ مدينة';
+    const typeLabel = isCapital ? ' القصر الإمبراطوري' : ' مدينة';
     await bot.sendMessage(
       chatId,
-      `✅ تمت إضافة المدينة بنجاح\\!\n${typeLabel}: *${name}*\n*المملكة:* ${kingdom.name}\n*Chat ID:* \`${groupChatId}\``,
+      `تمت إضافة المدينة بنجاح\\!\n${typeLabel}: *${name}*\n*المملكة:* ${kingdom.name}\n*Chat ID:* \`${groupChatId}\``,
       { parse_mode: 'Markdown' }
     );
   });
@@ -100,7 +100,7 @@ function register(bot) {
     const telegramId = msg.from.id;
 
     if (!permissions.isMainAdmin(telegramId)) {
-      return bot.sendMessage(chatId, '🚫 هذا الأمر مخصص للمشرف الرئيسي فقط.');
+      return bot.sendMessage(chatId, ' هذا الأمر مخصص للمشرف الرئيسي فقط.');
     }
 
     const groupChatId = parseInt(match[1], 10);
@@ -114,14 +114,14 @@ function register(bot) {
     );
 
     if (!city) {
-      return bot.sendMessage(chatId, `❌ لم يُعثر على مدينة بـ chat_id: \`${groupChatId}\``, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, ` لم يُعثر على مدينة بـ chat_id: \`${groupChatId}\``, { parse_mode: 'Markdown' });
     }
 
     await db.query('DELETE FROM cities WHERE chat_id = ?', [groupChatId]);
 
     await bot.sendMessage(
       chatId,
-      `🗑️ تم حذف المدينة *${city.name}* \\(${city.kingdomName}\\) بنجاح\\.`,
+      ` تم حذف المدينة *${city.name}* \\(${city.kingdomName}\\) بنجاح\\.`,
       { parse_mode: 'Markdown' }
     );
   });
@@ -132,14 +132,14 @@ function register(bot) {
     const telegramId = msg.from.id;
 
     if (!permissions.isMainAdmin(telegramId)) {
-      return bot.sendMessage(chatId, '🚫 هذا الأمر مخصص للمشرف الرئيسي فقط.');
+      return bot.sendMessage(chatId, ' هذا الأمر مخصص للمشرف الرئيسي فقط.');
     }
 
     const kingdomId = parseInt(match[1], 10);
 
     const kingdom = await db.queryOne('SELECT id, name FROM kingdoms WHERE id = ?', [kingdomId]);
     if (!kingdom) {
-      return bot.sendMessage(chatId, `❌ لم يُعثر على مملكة بـ ID: \`${kingdomId}\``, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, ` لم يُعثر على مملكة بـ ID: \`${kingdomId}\``, { parse_mode: 'Markdown' });
     }
 
     // عدّ المدن قبل الحذف باش نبلّغ
@@ -153,7 +153,7 @@ function register(bot) {
 
     await bot.sendMessage(
       chatId,
-      `🗑️ تم حذف مملكة *${kingdom.name}* وكل مدنها \\(${total} مدينة\\) بنجاح\\.`,
+      ` تم حذف مملكة *${kingdom.name}* وكل مدنها \\(${total} مدينة\\) بنجاح\\.`,
       { parse_mode: 'Markdown' }
     );
   });
@@ -164,19 +164,19 @@ function register(bot) {
     const telegramId = msg.from.id;
 
     if (!permissions.isMainAdmin(telegramId)) {
-      return bot.sendMessage(chatId, '🚫 هذا الأمر مخصص للمشرف الرئيسي فقط.');
+      return bot.sendMessage(chatId, ' هذا الأمر مخصص للمشرف الرئيسي فقط.');
     }
 
     const kingdoms = await db.query('SELECT id, name FROM kingdoms ORDER BY id');
 
     if (kingdoms.length === 0) {
-      return bot.sendMessage(chatId, 'ℹ️ لا توجد ممالك مسجلة بعد.');
+      return bot.sendMessage(chatId, ' لا توجد ممالك مسجلة بعد.');
     }
 
     const lines = ['*قائمة الممالك والمدن:*', ''];
 
     for (const kingdom of kingdoms) {
-      lines.push(`🏰 *${kingdom.name}* \\(ID: \`${kingdom.id}\`\\)`);
+      lines.push(` *${kingdom.name}* \\(ID: \`${kingdom.id}\`\\)`);
 
       const cities = await db.query(
         'SELECT chat_id, name, is_capital FROM cities WHERE kingdom_id = ? ORDER BY is_capital DESC, name',
@@ -187,7 +187,7 @@ function register(bot) {
         lines.push('  _لا توجد مدن_');
       } else {
         for (const city of cities) {
-          const icon = city.is_capital ? '👑' : '🏙️';
+          const icon = city.is_capital ? '' : '';
           lines.push(`  ${icon} ${city.name} \\| \`${city.chat_id}\``);
         }
       }

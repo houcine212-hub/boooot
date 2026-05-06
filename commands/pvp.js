@@ -152,7 +152,7 @@ function setChallengeTimer(bot, challenge) {
     deletePendingChallenge(challenge.chatId);
     await replaceChallengeMessage(
       bot, current,
-      `⌛ تحدي Friendly PvP بين ${current.challengerName} و${current.opponentName} انتهى بسبب عدم الرد.`
+      ` تحدي Friendly PvP بين ${current.challengerName} و${current.opponentName} انتهى بسبب عدم الرد.`
     );
   }, REQUEST_TTL);
   requestTimers.set(challenge.chatId, timerId);
@@ -178,7 +178,7 @@ function setFightTimer(bot, chatId) {
     if (!stallerId) {
       cancelFight(chatId);
       try {
-        await bot.sendMessage(chatId, '⌛ انتهت مهلة Friendly PvP بسبب عدم النشاط. تم إنهاء النزال تلقائياً.');
+        await bot.sendMessage(chatId, ' انتهت مهلة Friendly PvP بسبب عدم النشاط. تم إنهاء النزال تلقائياً.');
       } catch {}
       return;
     }
@@ -191,9 +191,9 @@ function setFightTimer(bot, chatId) {
     try {
       await bot.sendMessage(chatId,
         [
-          '⌛ *انتهت المهلة! \\(3 دقيقة\\)*',
-          `😴 *${escapeMarkdown(loser.name)}* تقاعس ولم يتحرك في الوقت المحدد\\.`,
-          `🏆 *${escapeMarkdown(winner.name)}* فاز بـ *Timeout Forfeit*\\!`
+          ' *انتهت المهلة! \\(3 دقيقة\\)*',
+          ` *${escapeMarkdown(loser.name)}* تقاعس ولم يتحرك في الوقت المحدد\\.`,
+          ` *${escapeMarkdown(winner.name)}* فاز بـ *Timeout Forfeit*\\!`
         ].join('\n'),
         { parse_mode: 'MarkdownV2' }
       );
@@ -239,7 +239,7 @@ function cancelFight(chatId) {
 function hpLine(fight) {
   const ids = fightParticipants(fight);
   return ids
-    .map(id => `❤️ ${fight.players[id].name}: *${fight.players[id].currentHp}*`)
+    .map(id => ` ${fight.players[id].name}: *${fight.players[id].currentHp}*`)
     .join('  |  ');
 }
 
@@ -281,7 +281,7 @@ function createChainEntry(fight, playerId, card) {
 function getChainEntryCaption(entry) {
   if (!entry?.card) return null;
   const actionLabel = entry.role === 'active' ? 'لعب' : 'رد بـ';
-  return `🎴 *${escapeMarkdown(entry.playerName)}* ${actionLabel}: *${escapeMarkdown(entry.card.name)}* (\`${entry.card.card_id}\`)`;
+  return ` *${escapeMarkdown(entry.playerName)}* ${actionLabel}: *${escapeMarkdown(entry.card.name)}* (\`${entry.card.card_id}\`)`;
 }
 
 function getChainSummary(fight) {
@@ -303,7 +303,7 @@ function getThreatDescription(fight) {
   const lastEntry = chain[chain.length - 1];
 
   if (!lastEntry) {
-    return '⚠️ *Threat:* No pending threat.';
+    return ' *Threat:* No pending threat.';
   }
 
   const opponentRole = lastEntry.role === 'active' ? 'reactive' : 'active';
@@ -313,37 +313,37 @@ function getThreatDescription(fight) {
 
   if (lastEntry.kind === 'attack') {
     const damage = (Number(lastEntry.card.atk) || 0) + (Number(lastEntry.card.magic) || 0);
-    return `⚠️ *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will deal *${damage} HP* to *${opponentName}* if it is not countered.`;
+    return ` *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will deal *${damage} HP* to *${opponentName}* if it is not countered.`;
   }
 
   if (lastEntry.kind === 'skill') {
     switch (skill?.type) {
       case 'reflect':
-        return `⚠️ *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will reflect the previous attack or harmful skill if it is strong enough.`;
+        return ` *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will reflect the previous attack or harmful skill if it is strong enough.`;
       case 'negate':
-        return `⚠️ *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will negate the previous attack or skill if it is strong enough, then cleanse its caster.`;
+        return ` *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will negate the previous attack or skill if it is strong enough, then cleanse its caster.`;
       case 'almighty':
-        return `⚠️ *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will overpower the previous attack or skill if it is strong enough, then cleanse its caster.`;
+        return ` *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will overpower the previous attack or skill if it is strong enough, then cleanse its caster.`;
       case 'stun':
-        return `⚠️ *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will stun *${opponentName}* and make them lose their next turn if it resolves.`;
+        return ` *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will stun *${opponentName}* and make them lose their next turn if it resolves.`;
       case 'poison':
-        return `⚠️ *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will poison *${opponentName}* if it resolves.`;
+        return ` *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will poison *${opponentName}* if it resolves.`;
       case 'weapon_buff':
-        return `⚠️ *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will activate a weapon buff if it resolves.`;
+        return ` *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will activate a weapon buff if it resolves.`;
       default:
-        return `⚠️ *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will resolve next if nobody counters it.`;
+        return ` *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will resolve next if nobody counters it.`;
     }
   }
 
   if (lastEntry.kind === 'defense') {
-    return `⚠️ *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* is the latest defensive play in the stack.`;
+    return ` *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* is the latest defensive play in the stack.`;
   }
 
   if (lastEntry.kind === 'support') {
-    return `⚠️ *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* is the latest support play in the stack.`;
+    return ` *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* is the latest support play in the stack.`;
   }
 
-  return `⚠️ *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will resolve next if nobody counters it.`;
+  return ` *Threat:* ${lastEntry.playerName}'s *${lastEntry.card.name}* will resolve next if nobody counters it.`;
 }
 
 // ─── End fight (natural win/lose) ─────────────────────────────────────────────
@@ -371,10 +371,10 @@ function _calcPower(identityCard) {
 }
 
 function _getPvPBonus(powerDiff) {
-  if (powerDiff >= 2000)             return { points: 200, label: '💪 الخصم كان أقوى بكثير' };
-  if (powerDiff > 0)                 return { points: 100, label: '⚔️ الخصم كان أقوى قليلاً' };
-  if (powerDiff > -2000)             return { points: 50,  label: '⚖️ الخصم كان بنفس مستواك تقريباً' };
-  /* powerDiff <= -2000 */           return { points: 20,  label: '🐣 الخصم كان أضعف بكثير' };
+  if (powerDiff >= 2000)             return { points: 200, label: ' الخصم كان أقوى بكثير' };
+  if (powerDiff > 0)                 return { points: 100, label: ' الخصم كان أقوى قليلاً' };
+  if (powerDiff > -2000)             return { points: 50,  label: ' الخصم كان بنفس مستواك تقريباً' };
+  /* powerDiff <= -2000 */           return { points: 20,  label: ' الخصم كان أضعف بكثير' };
 }
 
 async function applyPvPWinBonus(bot, chatId, winnerState, loserState) {
@@ -413,9 +413,9 @@ async function applyPvPWinBonus(bot, chatId, winnerState, loserState) {
 
   await bot.sendMessage(chatId,
     [
-      `🎉 *مكافأة الفوز في PvP!*`,
+      ` *مكافأة الفوز في PvP!*`,
       `${label}`,
-      `⬆️ جميع إحصائياتك ارتفعت *+${points}* نقطة!`
+      `⬆ جميع إحصائياتك ارتفعت *+${points}* نقطة!`
     ].join('\n'),
     { parse_mode: 'Markdown' }
   );
@@ -430,7 +430,7 @@ async function checkWin(bot, chatId, fight) {
 
   if (dead.length >= 2) {
     await bot.sendMessage(chatId,
-      `🤝 *تعادل!* كلا اللاعبين وصلا إلى 0 HP في نفس الوقت!`,
+      ` *تعادل!* كلا اللاعبين وصلا إلى 0 HP في نفس الوقت!`,
       { parse_mode: 'Markdown' }
     );
   } else {
@@ -441,11 +441,11 @@ async function checkWin(bot, chatId, fight) {
       winner.playerId, chatId, 100, 'فوز في نزال PvP'
     );
     const mgLine = mgReward > 0
-      ? `\n💰 مكافأة المدينة: +${mgReward} MG`
-      : `\n⚠️ صندوق مدينتك فارغ، لم تحصل على مكافأة MG!`;
+      ? `\n مكافأة المدينة: +${mgReward} MG`
+      : `\n صندوق مدينتك فارغ، لم تحصل على مكافأة MG!`;
 
     await bot.sendMessage(chatId,
-      `🏆 *${winner.name} فاز!*\n💀 ${loser.name} هُزم!\n❤️ HP المتبقي: *${winner.currentHp}*${mgLine}`,
+      ` *${winner.name} فاز!*\n ${loser.name} هُزم!\n HP المتبقي: *${winner.currentHp}*${mgLine}`,
       { parse_mode: 'Markdown' }
     );
     await db.query('UPDATE players SET wins   = wins   + 1 WHERE telegram_id = ?', [winner.telegramId]);
@@ -486,15 +486,15 @@ async function promptChainResponse(bot, chatId, fight) {
   }
 
   await sendCombatLines(bot, chatId, [
-    '📊 *Battle Update*',
+    ' *Battle Update*',
     hpLine(fight),
     '',
-    '⛓️ *Current Chain:*',
+    ' *Current Chain:*',
     getChainSummary(fight),
     '',
     getThreatDescription(fight),
     '',
-    `👉 *${responder.name}*, do you want to respond with a *Skill* to counter this, or *Pass*?`,
+    ` *${responder.name}*, do you want to respond with a *Skill* to counter this, or *Pass*?`,
     'Send a Skill card (`SKL-XXXXX`) or type `skip`.'
   ]);
 
@@ -512,9 +512,9 @@ async function promptActiveTurn(bot, chatId, fight, { showIntro = false } = {}) 
 
   if (showIntro) {
     await sendCombatLines(bot, chatId, [
-      `🥊 *Round ${fight.round} — النزال يبدأ!*`,
-      `⚡ Active: ${active.name}   ❤️ ${active.currentHp}`,
-      `🛡️ Reactive: ${reactive.name}   ❤️ ${reactive.currentHp}`
+      ` *Round ${fight.round} — النزال يبدأ!*`,
+      ` Active: ${active.name}    ${active.currentHp}`,
+      ` Reactive: ${reactive.name}    ${reactive.currentHp}`
     ]);
   }
 
@@ -531,7 +531,7 @@ async function promptActiveTurn(bot, chatId, fight, { showIntro = false } = {}) 
 
   fight.status = 'active_turn';
   await sendCombatLines(bot, chatId, [
-    `⚔️ *Round ${fight.round}* — ${active.name}، دورك!`,
+    ` *Round ${fight.round}* — ${active.name}، دورك!`,
     `صيفط بطاقة (PLC / WPN / SKL):`
   ]);
   return true;
@@ -539,8 +539,8 @@ async function promptActiveTurn(bot, chatId, fight, { showIntro = false } = {}) 
 
 async function sendResolution(bot, chatId, fight, resolution) {
   await sendCombatLines(bot, chatId, [
-    `📊 *نتيجة Round ${fight.round}:*`,
-    ...(resolution.summaryLines.length > 0 ? resolution.summaryLines : ['ℹ️ لم يحدث أي تأثير مباشر.']),
+    ` *نتيجة Round ${fight.round}:*`,
+    ...(resolution.summaryLines.length > 0 ? resolution.summaryLines : [' لم يحدث أي تأثير مباشر.']),
     '',
     hpLine(fight)
   ]);
@@ -561,18 +561,18 @@ async function handleActiveTurn(bot, chatId, fight, telegramId, cardId) {
   const reactivePlayer = fight.players[reactiveId];
 
   if (!cardId) {
-    await bot.sendMessage(chatId, `❌ ${activePlayer.name}: صيفط بطاقة صالحة (PLC / WPN / SKL).`);
+    await bot.sendMessage(chatId, ` ${activePlayer.name}: صيفط بطاقة صالحة (PLC / WPN / SKL).`);
     return true;
   }
 
   const card = await getPlayerCard(telegramId, cardId);
   if (!card) {
-    await bot.sendMessage(chatId, '❌ البطاقة غير موجودة أو ليست لك.');
+    await bot.sendMessage(chatId, ' البطاقة غير موجودة أو ليست لك.');
     return true;
   }
 
   if (activePlayer.usedCards.has(cardId)) {
-    await bot.sendMessage(chatId, '❌ هذه البطاقة استُخدمت مسبقاً.');
+    await bot.sendMessage(chatId, ' هذه البطاقة استُخدمت مسبقاً.');
     return true;
   }
 
@@ -593,7 +593,7 @@ async function handleChainResponse(bot, chatId, fight, telegramId, cardId, rawTe
   if (!Array.isArray(fight.turnChain) || fight.turnChain.length === 0) {
     fight.status = 'active_turn';
     fight.chainResponderId = null;
-    await bot.sendMessage(chatId, 'ℹ️ The chain was empty, so the active player can play again.');
+    await bot.sendMessage(chatId, ' The chain was empty, so the active player can play again.');
     return true;
   }
 
@@ -601,7 +601,7 @@ async function handleChainResponse(bot, chatId, fight, telegramId, cardId, rawTe
     fight.status = 'processing';
 
     await sendCombatLines(bot, chatId, [
-      `⏭️ *${respondingPlayer.name}* passed.`,
+      ` *${respondingPlayer.name}* passed.`,
       'Resolving the chain...'
     ]);
 
@@ -629,7 +629,7 @@ async function handleChainResponse(bot, chatId, fight, telegramId, cardId, rawTe
   }
 
   if (!cardId) {
-    await bot.sendMessage(chatId, `❌ ${respondingPlayer.name}: send a Skill card (\`SKL-XXXXX\`) or type \`skip\`.`, {
+    await bot.sendMessage(chatId, ` ${respondingPlayer.name}: send a Skill card (\`SKL-XXXXX\`) or type \`skip\`.`, {
       parse_mode: 'Markdown'
     });
     return true;
@@ -637,19 +637,19 @@ async function handleChainResponse(bot, chatId, fight, telegramId, cardId, rawTe
 
   const card = await getPlayerCard(telegramId, cardId);
   if (!card) {
-    await bot.sendMessage(chatId, '❌ البطاقة غير موجودة أو ليست لك.');
+    await bot.sendMessage(chatId, ' البطاقة غير موجودة أو ليست لك.');
     return true;
   }
 
   if (combatEngine.getCardKind(card) !== 'skill') {
-    await bot.sendMessage(chatId, '❌ During a chain response, only Skill cards are allowed. Type `skip` to pass.', {
+    await bot.sendMessage(chatId, ' During a chain response, only Skill cards are allowed. Type `skip` to pass.', {
       parse_mode: 'Markdown'
     });
     return true;
   }
 
   if (respondingPlayer.usedCards.has(cardId)) {
-    await bot.sendMessage(chatId, '❌ هذه البطاقة استُخدمت مسبقاً.');
+    await bot.sendMessage(chatId, ' هذه البطاقة استُخدمت مسبقاً.');
     return true;
   }
 
@@ -683,36 +683,36 @@ async function startFriendlyChallenge(bot, { chatId, challengerUser, opponentUse
 
   if (!opponentUser || !opponentId) {
     return bot.sendMessage(chatId,
-      '❌ باش تبدا Friendly PvP، دير $fight كردّ على message ديال اللاعب اللي بغيتي تتحداه، ومن بعد اختار Friendly.'
+      ' باش تبدا Friendly PvP، دير $fight كردّ على message ديال اللاعب اللي بغيتي تتحداه، ومن بعد اختار Friendly.'
     );
   }
 
-  if (opponentUser.is_bot)        return bot.sendMessage(chatId, '❌ Friendly PvP كيتخدم غير بين جوج لاعبين، ماشي ضد bot.');
-  if (challengerId === opponentId) return bot.sendMessage(chatId, '❌ ما تقدرش تتحدى راسك.');
+  if (opponentUser.is_bot)        return bot.sendMessage(chatId, ' Friendly PvP كيتخدم غير بين جوج لاعبين، ماشي ضد bot.');
+  if (challengerId === opponentId) return bot.sendMessage(chatId, ' ما تقدرش تتحدى راسك.');
 
   if (hasPendingChallenge(chatId) || hasFight(chatId)) {
-    return bot.sendMessage(chatId, '❌ كاين بالفعل Friendly PvP challenge أو fight خدام فهاد الشات.');
+    return bot.sendMessage(chatId, ' كاين بالفعل Friendly PvP challenge أو fight خدام فهاد الشات.');
   }
 
   if (session.hasActiveSession(challengerId) || session.hasActiveSession(opponentId)) {
     return bot.sendMessage(chatId,
-      '❌ واحد من اللاعبين عندو عملية جارية دابا. ساليوها أولاً بـ $cancel ومن بعد عاودو المحاولة.'
+      ' واحد من اللاعبين عندو عملية جارية دابا. ساليوها أولاً بـ $cancel ومن بعد عاودو المحاولة.'
     );
   }
 
   if (findBusyContextByParticipant(challengerId) || findBusyContextByParticipant(opponentId)) {
-    return bot.sendMessage(chatId, '❌ واحد من اللاعبين راه داخل already فـ Friendly PvP آخر.');
+    return bot.sendMessage(chatId, ' واحد من اللاعبين راه داخل already فـ Friendly PvP آخر.');
   }
 
   const challengerPlayer = await getPlayerByTelegramId(challengerId);
   if (!challengerPlayer) {
-    return bot.sendMessage(chatId, '❌ خاصك تدير $login قبل ما تبدا Friendly PvP.');
+    return bot.sendMessage(chatId, ' خاصك تدير $login قبل ما تبدا Friendly PvP.');
   }
 
   const opponentPlayer = await getPlayerByTelegramId(opponentId);
   if (!opponentPlayer) {
     const opponentName = getDisplayName(opponentUser, 'هاد اللاعب');
-    return bot.sendMessage(chatId, `❌ ${opponentName} مازال ما مسجلش. خاصو يدير $login الأول.`);
+    return bot.sendMessage(chatId, ` ${opponentName} مازال ما مسجلش. خاصو يدير $login الأول.`);
   }
 
   const challenge = {
@@ -729,7 +729,7 @@ async function startFriendlyChallenge(bot, { chatId, challengerUser, opponentUse
 
   const requestMessage = await bot.sendMessage(chatId,
     [
-      '⚔️ Friendly PvP Challenge!',
+      ' Friendly PvP Challenge!',
       `${challenge.challengerName} تحدّى ${challenge.opponentName}.`,
       '',
       `${challenge.opponentName}، واش كتقبل التحدي؟`,
@@ -738,8 +738,8 @@ async function startFriendlyChallenge(bot, { chatId, challengerUser, opponentUse
     {
       reply_markup: {
         inline_keyboard: [[
-          { text: '✅ Accept',  callback_data: `pvp_accept_${challenge.opponentId}`  },
-          { text: '❌ Decline', callback_data: `pvp_decline_${challenge.opponentId}` }
+          { text: ' Accept',  callback_data: `pvp_accept_${challenge.opponentId}`  },
+          { text: ' Decline', callback_data: `pvp_decline_${challenge.opponentId}` }
         ]]
       }
     }
@@ -758,7 +758,7 @@ async function startFriendlyChallenge(bot, { chatId, challengerUser, opponentUse
 async function startInitiative(bot, challenge) {
   if (session.hasActiveSession(challenge.challengerId) || session.hasActiveSession(challenge.opponentId)) {
     await bot.sendMessage(challenge.chatId,
-      '❌ ما قدرتش نبدا Friendly PvP حيت شي لاعب بدا session أخرى قبل ما نبداو.'
+      ' ما قدرتش نبدا Friendly PvP حيت شي لاعب بدا session أخرى قبل ما نبداو.'
     );
     return false;
   }
@@ -794,7 +794,7 @@ async function startInitiative(bot, challenge) {
   session.setSession(challenge.opponentId,   'pvp_fight', 'initiative', { chatId: challenge.chatId });
 
   await bot.sendMessage(challenge.chatId,
-    `⚡ Friendly PvP بين ${challenge.challengerName} و${challenge.opponentName} غادي يبدا دابا!`
+    ` Friendly PvP بين ${challenge.challengerName} و${challenge.opponentName} غادي يبدا دابا!`
   );
 
   for (const count of ['3...', '2...', '1...']) {
@@ -809,7 +809,7 @@ async function startInitiative(bot, challenge) {
   currentFight.status = 'initiative_race';
   await bot.sendMessage(challenge.chatId,
     [
-      '📤 صيفطو دابا Identity Card ديالكم.',
+      ' صيفطو دابا Identity Card ديالكم.',
       'الصيغة: IDC-XXXXX',
       'أول واحد يصيفط IDC صحيح غادي ياخذ initiative ويولي Active Player.'
     ].join('\n')
@@ -837,13 +837,13 @@ async function handlePvpCallback(bot, query) {
 
   if (action === 'decline') {
     await replaceChallengeMessage(bot, challenge,
-      `❌ ${challenge.opponentName} رفض Friendly PvP challenge ديال ${challenge.challengerName}.`
+      ` ${challenge.opponentName} رفض Friendly PvP challenge ديال ${challenge.challengerName}.`
     );
     return true;
   }
 
   await replaceChallengeMessage(bot, challenge,
-    `✅ ${challenge.opponentName} قبل Friendly PvP challenge ديال ${challenge.challengerName}.`
+    ` ${challenge.opponentName} قبل Friendly PvP challenge ديال ${challenge.challengerName}.`
   );
 
   await startInitiative(bot, challenge);
@@ -873,13 +873,13 @@ async function handleInitiativeCard(bot, chatId, fight, telegramId, cardId) {
   if (!player) return false;
 
   if (player.sentIdentity) {
-    await bot.sendMessage(chatId, `ℹ️ ${player.name} صيفط IDC ديالو already. كنتسناو اللاعب الآخر.`);
+    await bot.sendMessage(chatId, ` ${player.name} صيفط IDC ديالو already. كنتسناو اللاعب الآخر.`);
     return true;
   }
 
   const cards = await loadAndLockIdentityCard(telegramId, player.playerId, cardId);
   if (!cards || cards.identity.card_id !== cardId) {
-    await bot.sendMessage(chatId, '❌ هاد IDC ماشي ديالك أو غير صالح. صيفط Identity Card صحيحة ديالك.');
+    await bot.sendMessage(chatId, ' هاد IDC ماشي ديالك أو غير صالح. صيفط Identity Card صحيحة ديالك.');
     return true;
   }
 
@@ -902,7 +902,7 @@ async function handleInitiativeCard(bot, chatId, fight, telegramId, cardId) {
     const reactivePlayer = fight.players[reactiveId];
     await bot.sendMessage(chatId,
       [
-        `⚡ ${player.name} صيفط IDC أولاً!`,
+        ` ${player.name} صيفط IDC أولاً!`,
         `${player.name} ولى Active Player.`,
         `${reactivePlayer.name}، دابا دورك صيفط IDC ديالك باش نكملو setup.`
       ].join('\n')
@@ -912,7 +912,7 @@ async function handleInitiativeCard(bot, chatId, fight, telegramId, cardId) {
 
   // Already first was set — this is the second player
   if (fight.activePlayerId === telegramId) {
-    await bot.sendMessage(chatId, `ℹ️ ${player.name} راه خذا initiative déjà. كنتسناو اللاعب الآخر.`);
+    await bot.sendMessage(chatId, ` ${player.name} راه خذا initiative déjà. كنتسناو اللاعب الآخر.`);
     return true;
   }
 
@@ -922,9 +922,9 @@ async function handleInitiativeCard(bot, chatId, fight, telegramId, cardId) {
 
   await bot.sendMessage(chatId,
     [
-      '⚔️ *Initiative تحدد بنجاح!*',
-      `⚡ Active:   ${activePlayer.name}   ❤️ ${activePlayer.currentHp}`,
-      `🛡️ Reactive: ${reactivePlayer.name}  ❤️ ${reactivePlayer.currentHp}`,
+      ' *Initiative تحدد بنجاح!*',
+      ` Active:   ${activePlayer.name}    ${activePlayer.currentHp}`,
+      ` Reactive: ${reactivePlayer.name}   ${reactivePlayer.currentHp}`,
       '',
       `🎴 ${activePlayer.name}: \`${activePlayer.identityCard.card_id}\` — ${activePlayer.identityCard.name}`,
       `🎴 ${reactivePlayer.name}: \`${reactivePlayer.identityCard.card_id}\` — ${reactivePlayer.identityCard.name}`,
@@ -954,14 +954,14 @@ async function handleFightMessage(bot, msg, cardId) {
 
   // ── Countdown: too early ───────────────────────────────────────────────────
   if (fight.status === 'countdown') {
-    await bot.sendMessage(chatId, '⏳ تسناو حتى يكمل countdown، ومن بعد صيفطو IDC.');
+    await bot.sendMessage(chatId, ' تسناو حتى يكمل countdown، ومن بعد صيفطو IDC.');
     return true;
   }
 
   // ── Initiative phase ───────────────────────────────────────────────────────
   if (['initiative_race', 'initiative_waiting_other'].includes(fight.status)) {
     if (!cardId || !cardId.startsWith('IDC-')) {
-      await bot.sendMessage(chatId, '📤 صيفط Identity Card ديالك بصيغة IDC-XXXXX باش نحدد initiative.');
+      await bot.sendMessage(chatId, ' صيفط Identity Card ديالك بصيغة IDC-XXXXX باش نحدد initiative.');
       return true;
     }
     return handleInitiativeCard(bot, chatId, fight, telegramId, cardId);

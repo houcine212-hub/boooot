@@ -83,7 +83,7 @@ function registerAddRes(bot) {
       return bot.sendMessage(msg.chat.id, cb([
         '[ ＳＹＳＴＥＭ : RESOURCE REGISTERED ]',
         '┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓',
-        `   ${emoji || '🔹'} ${name} مسجلة في الكون!`,
+        `   ${emoji || ''} ${name} مسجلة في الكون!`,
         '┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛',
         `🔑 المفتاح   : ${key}`,
         `🆔 ID        : #${id}`,
@@ -285,16 +285,16 @@ function registerAddLoot(bot) {
       const res = await crafting.getResource(resKey.toLowerCase());
       return bot.sendMessage(msg.chat.id, cb([
         '[ ＳＹＳＴＥＭ : LOOT RULE ADDED ]',
-        `✅ قاعدة عشوائية جديدة — ID #${id}`,
-        `📍 المصدر   : ${source}`,
-        `${res?.emoji || '🔹'} المادة   : ${res?.display_name || resKey}`,
-        `📦 الكمية   : ${minStr} – ${maxStr}`,
-        `🎲 الاحتمال : ${(parseFloat(rateStr) * 100).toFixed(0)}%`,
+        ` قاعدة عشوائية جديدة — ID #${id}`,
+        ` المصدر   : ${source}`,
+        `${res?.emoji || ''} المادة   : ${res?.display_name || resKey}`,
+        ` الكمية   : ${minStr} – ${maxStr}`,
+        ` الاحتمال : ${(parseFloat(rateStr) * 100).toFixed(0)}%`,
       ]), { parse_mode: 'MarkdownV2' });
     } catch (err) {
       return bot.sendMessage(msg.chat.id, cb([
         '[ ＳＹＳＴＥＭ : ERROR ]',
-        `❌ ${err.message}`,
+        ` ${err.message}`,
       ]), { parse_mode: 'MarkdownV2' });
     }
   });
@@ -314,7 +314,7 @@ function registerResBag(bot) {
     if (!bag.length) {
       return bot.sendMessage(msg.chat.id, cb([
         '[ ＳＹＳＴＥＭ : RESOURCE BAG ]',
-        `👤 ${player.character_name}`,
+        ` ${player.character_name}`,
         '══════════════════════════════════',
         '  حقيبة الموارد فارغة.',
         '  اكسب مواد من المعارك أو المحل!',
@@ -324,9 +324,9 @@ function registerResBag(bot) {
 
     const lines = [
       '[ ＳＹＳＴＥＭ : RESOURCE BAG ]',
-      `👤 ${player.character_name}`,
+      ` ${player.character_name}`,
       '══════════════════════════════════',
-      ...bag.map(r => `  ${r.emoji || '🔹'} ${(r.display_name || r.resource_key).padEnd(20)} ×${r.quantity}`),
+      ...bag.map(r => `  ${r.emoji || ''} ${(r.display_name || r.resource_key).padEnd(20)} ×${r.quantity}`),
       '══════════════════════════════════',
       `  إجمالي: ${bag.length} نوع`,
     ];
@@ -394,13 +394,13 @@ async function handleForgeCallback(bot, query) {
   const { data, from, message } = query;
   const chatId = message.chat.id;
   const player = await getPlayer(from.id);
-  if (!player) return bot.answerCallbackQuery(query.id, { text: '⚠️ غير مسجل', show_alert: true });
+  if (!player) return bot.answerCallbackQuery(query.id, { text: ' غير مسجل', show_alert: true });
 
   // ── Detail view ──────────────────────────────────────────────────────────
   if (data.startsWith('forge_detail_')) {
     const ruleId = parseInt(data.slice(13), 10);
     const rule   = await crafting.getRule(ruleId);
-    if (!rule) return bot.answerCallbackQuery(query.id, { text: '❌ القانون غير موجود', show_alert: true });
+    if (!rule) return bot.answerCallbackQuery(query.id, { text: ' القانون غير موجود', show_alert: true });
 
     const req    = typeof rule.input_requirements === 'object' ? rule.input_requirements : JSON.parse(rule.input_requirements || '{}');
     const bag    = await crafting.getPlayerBag(player.id);
@@ -426,10 +426,10 @@ async function handleForgeCallback(bot, query) {
     if (rule.mg_cost > 0) {
       const mgOk = player.mg_balance >= rule.mg_cost;
       if (!mgOk) canForge = false;
-      lines.push(`│ 🟡 التكلفة: ${player.mg_balance}/${rule.mg_cost} MG ${mgOk ? '✅' : '❌'}`);
+      lines.push(`│  التكلفة: ${player.mg_balance}/${rule.mg_cost} MG ${mgOk ? '✅' : '❌'}`);
     }
     lines.push('├──────────────────────────────────');
-    lines.push(`│ 📤 المخرج: [${rule.output_type}]`);
+    lines.push(`│  المخرج: [${rule.output_type}]`);
     lines.push('└──────────────────────────────────');
 
     return bot.editMessageText(cb(lines), {
@@ -439,9 +439,9 @@ async function handleForgeCallback(bot, query) {
       reply_markup: {
         inline_keyboard: [
           canForge
-            ? [{ text: '⚗️ صنع الآن!', callback_data: `forge_confirm_${ruleId}` }]
-            : [{ text: '❌ مواد غير كافية', callback_data: 'forge_noop' }],
-          [{ text: '🔙 رجوع', callback_data: 'forge_back' }],
+            ? [{ text: ' صنع الآن!', callback_data: `forge_confirm_${ruleId}` }]
+            : [{ text: ' مواد غير كافية', callback_data: 'forge_noop' }],
+          [{ text: ' رجوع', callback_data: 'forge_back' }],
         ],
       },
     });
@@ -478,27 +478,27 @@ async function handleForgeCallback(bot, query) {
         `   العنصر المكتسب: ${result.outputSummary}`,
         `   القانون: "${result.rule.rule_name}"`,
         '┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛',
-        result.rule.mg_cost > 0 ? `🟡 تم خصم: ${result.rule.mg_cost} MG` : '',
+        result.rule.mg_cost > 0 ? ` تم خصم: ${result.rule.mg_cost} MG` : '',
       ].filter(Boolean)), {
         chat_id: chatId,
         message_id: message.message_id,
         parse_mode: 'MarkdownV2',
         reply_markup: {
-          inline_keyboard: [[{ text: '⚗️ صنع مجدداً', callback_data: 'forge_back' }]],
+          inline_keyboard: [[{ text: ' صنع مجدداً', callback_data: 'forge_back' }]],
         },
       });
     } catch (err) {
       return bot.editMessageText(cb([
         '[ ＳＹＳＴＥＭ : FORGE FAILED ]',
         '┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓',
-        `   ❌ ${err.message}`,
+        `    ${err.message}`,
         '┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛',
       ]), {
         chat_id: chatId,
         message_id: message.message_id,
         parse_mode: 'MarkdownV2',
         reply_markup: {
-          inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'forge_back' }]],
+          inline_keyboard: [[{ text: ' رجوع', callback_data: 'forge_back' }]],
         },
       });
     }
@@ -524,9 +524,9 @@ async function handleForgeCallback(bot, query) {
     return bot.editMessageText(cb([
       '[ ＳＹＳＴＥＭ : FORGE — BLUEPRINTS ]',
       '┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓',
-      '   ⚗️  مصنع الكون — قوانين الخلق',
+      '     مصنع Raazn Seystem ',
       '┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛',
-      `👤 ${player.character_name}   🟡 ${player.mg_balance} MG`,
+      ` ${player.character_name}    ${player.mg_balance} MG`,
       '──────────────────────────────────',
       `  ${rules.length} قانون متاح`,
     ]), {

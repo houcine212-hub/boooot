@@ -4,21 +4,21 @@ const botFight = require('../handlers/botFight');
 const pvpFight = require('../commands/pvp');
 
 const ACTION_LABELS = {
-  login: '📝 تسجيل الدخول',
-  identity_card: '🎭 إنشاء بطاقة تعريفية',
-  bot_identity_card: '🤖 إنشاء بطاقة تعريفية للبوت',
-  play_card: '⚔️ إنشاء بطاقة لعب',
-  bot_play_card: '🤖 إنشاء بطاقة لعب للبوت',
-  skill_card: '🌟 إنشاء بطاقة مهارة',
-  bot_skill_card: '🤖 إنشاء بطاقة مهارة للبوت',
-  weapon_card: '🗡️ إنشاء بطاقة سلاح',
-  bot_weapon_card: '🤖 إنشاء بطاقة سلاح للبوت',
-  newbotcard: '🤖 إنشاء مجموعة بطاقات بوت',
-  fast_player_cards: '🧪 إنشاء مجموعة تجريبية للاعب',
-  fast_bot_cards: '🤖 إنشاء مجموعة بوت تجريبية',
-  setcardbot: '🔗 ربط بطاقة ببوت',
-  bot_fight: '⚔️ نزال مع KimiBot',
-  pvp_fight: '🤝 Friendly PvP'
+  login: ' تسجيل الدخول',
+  identity_card: ' إنشاء بطاقة تعريفية',
+  bot_identity_card: ' إنشاء بطاقة تعريفية للبوت',
+  play_card: ' إنشاء بطاقة لعب',
+  bot_play_card: ' إنشاء بطاقة لعب للبوت',
+  skill_card: ' إنشاء بطاقة مهارة',
+  bot_skill_card: ' إنشاء بطاقة مهارة للبوت',
+  weapon_card: ' إنشاء بطاقة سلاح',
+  bot_weapon_card: ' إنشاء بطاقة سلاح للبوت',
+  newbotcard: ' إنشاء مجموعة بطاقات بوت',
+  fast_player_cards: ' إنشاء مجموعة تجريبية للاعب',
+  fast_bot_cards: ' إنشاء مجموعة بوت تجريبية',
+  setcardbot: ' ربط بطاقة ببوت',
+  bot_fight: ' نزال مع KimiBot',
+  pvp_fight: ' Friendly PvP'
 };
 
 function register(bot) {
@@ -46,7 +46,7 @@ function register(bot) {
           session.clearSession(fight.playerTelegramId);
         }
 
-        cancelled.push('⚔️ نزال مع KimiBot');
+        cancelled.push(' نزال مع KimiBot');
       }
     }
 
@@ -66,7 +66,7 @@ function register(bot) {
           } catch {}
         }
 
-        cancelled.push('🤝 تحدي Friendly PvP');
+        cancelled.push(' تحدي Friendly PvP');
       }
     }
 
@@ -76,7 +76,7 @@ function register(bot) {
 
       if (isAdmin || isParticipant) {
         pvpFight.cancelFight(chatId);
-        cancelled.push('🤝 Friendly PvP');
+        cancelled.push(' Friendly PvP');
       }
     }
 
@@ -87,7 +87,7 @@ function register(bot) {
     const list = cancelled.map(label => `• ${label}`).join('\n');
     return bot.sendMessage(
       chatId,
-      `✅ *تم الإلغاء بنجاح!*\n\n${list}\n\n_يمكنك البدء من جديد في أي وقت._`,
+      ` *تم الإلغاء بنجاح!*\n\n${list}\n\n_يمكنك البدء من جديد في أي وقت._`,
       { parse_mode: 'Markdown' }
     );
   });

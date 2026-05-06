@@ -55,7 +55,7 @@ async function promptForPhoto(bot, chatId, telegramId, card) {
 
   await bot.sendMessage(
     chatId,
-    `🖼️ ${card.label}: *${escapeMarkdown(card.name)}*\n🆔 \`${card.card_id}\`\n\nدابا صيفط الصورة ديال هاد البطاقة.`,
+    ` ${card.label}: *${escapeMarkdown(card.name)}*\n \`${card.card_id}\`\n\nدابا صيفط الصورة ديال هاد البطاقة.`,
     { parse_mode: 'Markdown' }
   );
 }
@@ -66,7 +66,7 @@ function register(bot) {
     const telegramId = msg.from.id;
 
     if (!(await permissions.isAdmin(telegramId))) {
-      return bot.sendMessage(chatId, '🚫 أدمن فقط.');
+      return bot.sendMessage(chatId, ' أدمن فقط.');
     }
 
     const cardId = extractCardId(match?.[1] || '');
@@ -75,14 +75,14 @@ function register(bot) {
       session.setSession(telegramId, 'setimg', 'awaiting_card_id');
       return bot.sendMessage(
         chatId,
-        '🖼️ صيفط ID ديال البطاقة أولاً.\nمثال: `$setimg IDC-12345` أو صيفط غير `IDC-12345`.',
+        ' صيفط ID ديال البطاقة أولاً.\nمثال: `$setimg IDC-12345` أو صيفط غير `IDC-12345`.',
         { parse_mode: 'Markdown' }
       );
     }
 
     const card = await loadCard(cardId);
     if (!card) {
-      return bot.sendMessage(chatId, `❌ البطاقة \`${cardId}\` غير موجودة.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, ` البطاقة \`${cardId}\` غير موجودة.`, { parse_mode: 'Markdown' });
     }
 
     return promptForPhoto(bot, chatId, telegramId, card);
@@ -99,20 +99,20 @@ async function handleStep(bot, msg) {
 
   if (!(await permissions.isAdmin(telegramId))) {
     session.clearSession(telegramId);
-    await bot.sendMessage(chatId, '🚫 أدمن فقط.');
+    await bot.sendMessage(chatId, ' أدمن فقط.');
     return true;
   }
 
   if (currentSession.step === 'awaiting_card_id') {
     const cardId = extractCardId(text);
     if (!cardId) {
-      await bot.sendMessage(chatId, '❌ صيفط ID صالح بحال `IDC-12345`.', { parse_mode: 'Markdown' });
+      await bot.sendMessage(chatId, ' صيفط ID صالح بحال `IDC-12345`.', { parse_mode: 'Markdown' });
       return true;
     }
 
     const card = await loadCard(cardId);
     if (!card) {
-      await bot.sendMessage(chatId, `❌ البطاقة \`${cardId}\` غير موجودة.`, { parse_mode: 'Markdown' });
+      await bot.sendMessage(chatId, ` البطاقة \`${cardId}\` غير موجودة.`, { parse_mode: 'Markdown' });
       return true;
     }
 
@@ -125,7 +125,7 @@ async function handleStep(bot, msg) {
   if (!msg.photo || msg.photo.length === 0) {
     await bot.sendMessage(
       chatId,
-      `🖼️ ما زلت كنتسنى الصورة ديال \`${currentSession.data.cardId}\`.\nصيفط Photo أو استعمل \`$cancel\`.`,
+      ` ما زلت كنتسنى الصورة ديال \`${currentSession.data.cardId}\`.\nصيفط Photo أو استعمل \`$cancel\`.`,
       { parse_mode: 'Markdown' }
     );
     return true;
@@ -141,7 +141,7 @@ async function handleStep(bot, msg) {
   session.clearSession(telegramId);
   await bot.sendMessage(
     chatId,
-    `✅ تم حفظ صورة البطاقة \`${currentSession.data.cardId}\` بنجاح.`,
+    ` تم حفظ صورة البطاقة \`${currentSession.data.cardId}\` بنجاح.`,
     { parse_mode: 'Markdown' }
   );
   return true;
